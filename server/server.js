@@ -29,6 +29,15 @@ app.get("/api/quote", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+const path = require("path");
+
+// Servi i file statici della build React
+app.use(express.static(path.join(__dirname, "../client/build")));
+
+// Tutte le altre richieste restituiscono index.html
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "../client/build", "index.html"));
+});
 
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {

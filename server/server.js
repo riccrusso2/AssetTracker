@@ -1,14 +1,15 @@
-// server/server.js
-const express = require("express");
-const fetch = require("node-fetch");
-const cors = require("cors");
 const path = require("path");
+const express = require("express");
+const cors = require("cors");
+const fetch = require("node-fetch");
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ===== Endpoint per ottenere la quotazione da JustETF =====
+// Serve i file statici del frontend React
+app.use(express.static(path.join(__dirname, "../build")));
+
 app.get("/api/quote", async (req, res) => {
   const isin = req.query.isin;
   if (!isin) return res.status(400).json({ error: "Missing ISIN" });
@@ -18,7 +19,7 @@ app.get("/api/quote", async (req, res) => {
   try {
     const r = await fetch(url, {
       headers: {
-        "User-Agent": "Mozilla/5.0", // evita blocchi da parte di JustETF
+        "User-Agent": "Mozilla/5.0",
         Accept: "application/json",
       },
     });
@@ -30,15 +31,12 @@ app.get("/api/quote", async (req, res) => {
   }
 });
 
-// Servi i file statici della build React
-app.use(express.static(path.join(__dirname, "../client/build")));
-
-// Tutte le altre richieste restituiscono index.html
+// Tutte le altre richieste servono index.html
 app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "../client/build", "index.html"));
+  res.sendFile(path.join(__dirname, "../build", "index.html"));
 });
 
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
   console.log(`Server avviato su http://localhost:${PORT}`);
 });

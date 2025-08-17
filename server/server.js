@@ -29,7 +29,6 @@ app.get("/api/quote", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-const path = require("path");
 
 // Servi i file statici della build React
 app.use(express.static(path.join(__dirname, "../client/build")));

@@ -81,11 +81,19 @@ function round2(n) {
 // --- Component ---
 export default function PortfolioDashboard() {
   const [assets, setAssets] = useState(() => {
+  try {
     const fromLS = localStorage.getItem(LS_ASSETS);
-    if (fromLS) return JSON.parse(fromLS);
+    if (fromLS) {
+      const parsed = JSON.parse(fromLS);
+      // Se è un array con almeno 1 elemento → lo uso
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (e) {
+    console.error("Errore parsing localStorage:", e);
+  }
 
-    // Se non c’è nulla in LS, usa i tuoi asset iniziali
-    return [
+  // fallback: lista iniziale di asset
+  return [
       {
         id: "ftseallworld",
         name: "FTSE All-World USD (Acc)",

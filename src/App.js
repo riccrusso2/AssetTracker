@@ -37,8 +37,8 @@ import {
 import "./styles.css";
 
 // --- Utility helpers ---
-const LS_ASSETS = "pf.assets.v2";
-const LS_HISTORY = "pf.history.v2"; // [{t: ISO, v: number}]
+const LS_ASSETS = "pf.assets.v3";
+const LS_HISTORY = "pf.history.v3"; // [{t: ISO, v: number}]
 
 function cryptoRandomId() {
   return Math.random().toString(36).slice(2, 10);

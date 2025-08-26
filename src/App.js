@@ -583,12 +583,14 @@ export default function PortfolioDashboard() {
                         : a.lastPrice !== null
                         ? `${formatCurrency(a.lastPrice)} ${a.currency || ""}`
                         : "—"}
-                    </td>
-                    <td className="px-3 text-right">{formatCurrency(value)}</td>
-                    <td className="px-3 text-right text-green-600 dark:text-green-400">
+                    <td
+                      className={`px-3 text-right ${
+                        perfEuro >= 0 ? "text-green-600" : "text-red-600"
+                      }`}
+                    >
                       {perfEuro >= 0 ? "+" : "-"}
                       {formatCurrency(Math.abs(perfEuro))}
-                    </td>
+                    </td>  
                     <td className="px-3 text-center">
                       <PerfBadge value={perfPct} />
                     </td>

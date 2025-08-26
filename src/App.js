@@ -577,12 +577,17 @@ export default function PortfolioDashboard() {
                   >
                     <td className="py-2 px-3 font-medium">{a.name}</td>
                     <td className="px-3 text-gray-500">{a.identifier}</td>
+                  
+                    {/* Prezzo unitario */}
                     <td className="px-3 text-right">
                       {loadingIds[a.id]
                         ? "↻"
                         : a.lastPrice !== null
                         ? `${formatCurrency(a.lastPrice)} ${a.currency || ""}`
                         : "—"}
+                    </td>
+                  
+                    {/* Perf. € con colore condizionale */}
                     <td
                       className={`px-3 text-right ${
                         perfEuro >= 0 ? "text-green-600" : "text-red-600"
@@ -591,10 +596,16 @@ export default function PortfolioDashboard() {
                       {perfEuro >= 0 ? "+" : "-"}
                       {formatCurrency(Math.abs(perfEuro))}
                     </td>  
+                  
+                    {/* Perf. % */}
                     <td className="px-3 text-center">
                       <PerfBadge value={perfPct} />
                     </td>
+                  
+                    {/* Peso */}
                     <td className="px-3 text-center">{w.toFixed(2)}%</td>
+                  
+                    {/* Ultimo aggiornamento */}
                     <td className="px-3 text-right text-gray-500 text-xs">
                       {a.lastUpdated
                         ? new Date(a.lastUpdated).toLocaleString()

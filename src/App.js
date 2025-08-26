@@ -587,6 +587,11 @@ export default function PortfolioDashboard() {
                         : "—"}
                     </td>
                   
+                    {/* Valore attuale */}
+                    <td className="px-3 text-right">
+                      {formatCurrency(value)}
+                    </td>
+                  
                     {/* Perf. € con colore condizionale */}
                     <td
                       className={`px-3 text-right ${
@@ -595,7 +600,7 @@ export default function PortfolioDashboard() {
                     >
                       {perfEuro >= 0 ? "+" : "-"}
                       {formatCurrency(Math.abs(perfEuro))}
-                    </td>  
+                    </td>
                   
                     {/* Perf. % */}
                     <td className="px-3 text-center">
@@ -612,6 +617,7 @@ export default function PortfolioDashboard() {
                         : "—"}
                     </td>
                   </tr>
+
                 );
               })}
             </tbody>

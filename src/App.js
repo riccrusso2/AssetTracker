@@ -427,42 +427,113 @@ export default function PortfolioDashboard() {
   // (manteniamo il resto del codice: stats, rebalance, grafici ecc.)
 
   // [QUI puoi copiare le sezioni "rebalance", "pieData", "barData", "lineData" e JSX dal tuo file attuale]
-
+  const MONTHLY_BUDGET = 500; // € da investire ogni mese
   // --- Rebalancing suggestions ---
   const rebalance = useMemo(() => {
-    const tv = totals.totalValue || 0;
-    if (tv <= 0) return { actions: [], diffSummary: [] };
+  const tv = totals.totalValue || 0;
+  if (tv <= 0) return { actions: [], diffSummary: [], monthlyBudget: MONTHLY_BUDGET };
 
-    // Normalizza target weights a somma 100 se l'utente non è preciso
-    const sumTarget =
-      assets.reduce((acc, a) => acc + (a.targetWeight || 0), 0) || 0;
-    const normFactor = sumTarget > 0 ? 100 / sumTarget : 1;
+  // Normalizza target a 100
+  const sumTarget = assets.reduce((acc, a) => acc + (a.targetWeight || 0), 0) || 0;
+  const normFactor = sumTarget > 0 ? 100 / sumTarget : 1;
 
-    const actions = assets.map((a) => {
-      const currentValue = (a.lastPrice || 0) * (a.quantity || 0);
-      const currentWeight = tv > 0 ? (currentValue / tv) * 100 : 0;
-      const targetW = (a.targetWeight || 0) * normFactor; // normalizzato
-      const targetValue = (targetW / 100) * tv;
-      const deltaValue = targetValue - currentValue; // + comprare, - vendere
-      const qty = a.lastPrice ? deltaValue / a.lastPrice : 0;
-      return {
-        id: a.id,
-        name: a.name,
-        identifier: a.identifier,
-        currentWeight,
-        targetWeight: targetW,
-        deltaValue,
-        qty,
-      };
+  // Calcolo stato attuale vs target
+  const actions = assets.map((a) => {
+    const currentValue = (a.lastPrice || 0) * (a.quantity || 0);
+    const currentWeight = tv > 0 ? (currentValue / tv) * 100 : 0;
+    const targetW = (a.targetWeight || 0) * normFactor; // %
+    const targetValue = (targetW / 100) * tv;
+    const deltaValue = targetValue - currentValue; // + da comprare, - sovrappeso
+    const qty = a.lastPrice ? deltaValue / a.lastPrice : 0;
+    return {
+      id: a.id,
+      name: a.name,
+      identifier: a.identifier,
+      currentWeight,
+      targetWeight: targetW,
+      deltaValue,
+      qty,
+      lastPrice: a.lastPrice,
+    };
+  });
+
+  // Piano PAC mensile: no-sell, delta-aware
+  const baseAlloc = assets.map(
+    (a) => ((a.targetWeight || 0) * normFactor / 100) * MONTHLY_BUDGET
+  );
+  const deltas = actions.map((x) => x.deltaValue);
+  const underIdx = deltas.map((d, i) => (d > 0 ? i : -1)).filter((i) => i !== -1);
+
+  let buy = baseAlloc.slice();
+
+  if (underIdx.length > 0) {
+    // 1) Clamp sovrappesi a 0, raccogli "freed" da redistribuire
+    let freed = 0;
+    buy = buy.map((amt, i) => {
+      if (deltas[i] <= 0) {
+        freed += amt;
+        return 0;
+      }
+      return amt;
     });
 
-    const diffSummary = actions.map((x) => ({
-      name: x.name,
-      deltaValue: x.deltaValue,
-      qty: x.qty,
-    }));
-    return { actions, diffSummary };
-  }, [assets, totals.totalValue]);
+    // 2) Redistribuisci il freed in proporzione ai Δ positivi
+    const sumPos = underIdx.reduce((acc, i) => acc + deltas[i], 0);
+    if (sumPos > 0) {
+      buy = buy.map((amt, i) => (deltas[i] > 0 ? amt + (freed * (deltas[i] / sumPos)) : amt));
+    }
+
+    // 3) Cap: non superare il Δ dell’asset; redistribuzione iterativa dell’avanzo
+    let leftover = 0;
+    buy = buy.map((amt, i) => {
+      if (deltas[i] > 0 && amt > deltas[i]) {
+        leftover += amt - deltas[i];
+        return deltas[i];
+      }
+      return amt;
+    });
+
+    let guard = 0;
+    while (leftover > 0.01 && guard < 8) {
+      guard++;
+      const room = buy.map((amt, i) => (deltas[i] > 0 ? Math.max(0, deltas[i] - amt) : 0));
+      const roomTotal = room.reduce((a, b) => a + b, 0);
+      if (roomTotal <= 0) break;
+      buy = buy.map((amt, i) =>
+        deltas[i] > 0 ? Math.min(deltas[i], amt + (leftover * (room[i] / roomTotal))) : amt
+      );
+      const spent = buy.reduce((acc, amt, i) => acc + (deltas[i] > 0 ? amt : 0), 0);
+      leftover = Math.max(0, MONTHLY_BUDGET - spent);
+    }
+
+    // 4) Se abbiamo coperto tutti i Δ ma resta budget, torna ai pesi target
+    const sumBuy = buy.reduce((a, b) => a + b, 0);
+    if (MONTHLY_BUDGET - sumBuy > 0.01) {
+      const baseTotal = baseAlloc.reduce((a, b) => a + b, 0) || 1;
+      buy = buy.map((amt, i) => amt + ((MONTHLY_BUDGET - sumBuy) * (baseAlloc[i] / baseTotal)));
+    }
+  } else {
+    // Nessun sottopeso: compra per target puro
+    buy = baseAlloc;
+  }
+
+  // Arrotonda e derivare quantità
+  const actionsWithPlan = actions.map((x, i) => {
+    const monthlyBuyEUR = round2(Math.max(0, buy[i] || 0));
+    const monthlyQty = x.lastPrice ? round2(monthlyBuyEUR / x.lastPrice) : null;
+    return { ...x, monthlyBuyEUR, monthlyQty };
+  });
+
+  const diffSummary = actionsWithPlan.map((x) => ({
+    name: x.name,
+    deltaValue: x.deltaValue,
+    qty: x.qty,
+    monthlyBuyEUR: x.monthlyBuyEUR,
+  }));
+
+  return { actions: actionsWithPlan, diffSummary, monthlyBudget: MONTHLY_BUDGET };
+}, [assets, totals.totalValue]);
+
 
   // --- Charts data ---
   const pieData = useMemo(
@@ -772,6 +843,7 @@ export default function PortfolioDashboard() {
                 <th>Target % (normalizzato)</th>
                 <th>Delta valore</th>
                 <th>Quantità stimata</th>
+                <th>Acquisto mese</th>
               </tr>
             </thead>
             <tbody>
@@ -788,6 +860,10 @@ export default function PortfolioDashboard() {
                     {formatCurrency(x.deltaValue)}
                   </td>
                   <td>{x.qty.toFixed(4)}</td>
+                  <td className="text-right text-green-600">
+                    {formatCurrency(x.monthlyBuyEUR)}
+                  </td>
+
                 </tr>
               ))}
             </tbody>

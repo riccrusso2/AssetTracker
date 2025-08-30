@@ -427,7 +427,7 @@ export default function PortfolioDashboard() {
   // (manteniamo il resto del codice: stats, rebalance, grafici ecc.)
 
   // [QUI puoi copiare le sezioni "rebalance", "pieData", "barData", "lineData" e JSX dal tuo file attuale]
-  const MONTHLY_BUDGET = 500; // € da investire ogni mese
+  const MONTHLY_BUDGET = 1500; // € da investire ogni mese
   // --- Rebalancing suggestions ---
   const rebalance = useMemo(() => {
   const tv = totals.totalValue || 0;
@@ -843,7 +843,7 @@ export default function PortfolioDashboard() {
                 <th>Target % (normalizzato)</th>
                 <th>Delta valore</th>
                 <th>Quantità stimata</th>
-                <th>Acquisto mese</th>
+                <th className="text-right">Acquisto mese</th>
               </tr>
             </thead>
             <tbody>

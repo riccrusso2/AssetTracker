@@ -564,7 +564,11 @@ export default function PortfolioDashboard() {
     "#f97316",
     "#22c55e",
   ];
-
+useEffect(() => {
+  fetchAllPrices();
+  intervalRef.current = setInterval(fetchAllPrices, 900000); // 15 min
+  return () => clearInterval(intervalRef.current);
+}, [fetchAllPrices]);
   return (
     <div className="max-w-7xl mx-auto p-4 space-y-6">
       <header className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
@@ -575,12 +579,6 @@ export default function PortfolioDashboard() {
           <p className="text-sm text-gray-500 flex items-center gap-1 mt-1">
   <Info className="w-4 h-4" /> Aggiornamento automatico ogni 15 min
 </p>
-
-useEffect(() => {
-  fetchAllPrices();
-  intervalRef.current = setInterval(fetchAllPrices, 900000); // 15 min
-  return () => clearInterval(intervalRef.current);
-}, [fetchAllPrices]);
         </div>
         {/* Nuovo bottone refresh globale */}
         <button

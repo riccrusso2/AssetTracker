@@ -37,8 +37,8 @@ import {
 import "./styles.css";
 
 // --- Utility helpers ---
-const LS_ASSETS = "pf.assets.v3";
-const LS_HISTORY = "pf.history.v3"; // [{t: ISO, v: number}]
+const LS_ASSETS = "pf.assets.v4";
+const LS_HISTORY = "pf.history.v4"; // [{t: ISO, v: number}]
 
 function cryptoRandomId() {
   return Math.random().toString(36).slice(2, 10);
@@ -101,7 +101,7 @@ export default function PortfolioDashboard() {
         quantity: 50.579514,
         currency: "",
         costBasis: 131.22,
-        targetWeight: 74,
+        targetWeight: 75,
         lastPrice: null,
         lastUpdated: null,
       },
@@ -123,40 +123,7 @@ export default function PortfolioDashboard() {
         quantity:11.247053,
         currency: "",
         costBasis: 51.93,
-        targetWeight: 6,
-        lastPrice: null,
-        lastUpdated: null,
-      },
-      {
-        id: "uranium",
-        name: "Uranium And Nuclear Technologies USD (Acc)",
-        identifier: "IE000M7V94E1",
-        quantity: 9.770779,
-        currency: "",
-        costBasis: 28.96 ,
-        targetWeight: 3,
-        lastPrice: null,
-        lastUpdated: null,
-      },
-      {
-        id: "semiconductors",
-        name: "MSCI Semiconductors ESG (Acc)",
-        identifier: "LU1900066033",
-        quantity: 8.343988,
-        currency: "",
-        costBasis: 54.54,
-        targetWeight: 5,
-        lastPrice: null,
-        lastUpdated: null,
-      },
-      {
-        id: "aerospace",
-        name: "Global Aerospace & Defence USD (Acc)",
-        identifier: "IE000U9ODG19",
-        quantity: 56.269483,
-        currency: "",
-        costBasis: 6.95,
-        targetWeight: 4,
+        targetWeight: 10,
         lastPrice: null,
         lastUpdated: null,
       },
@@ -168,7 +135,29 @@ export default function PortfolioDashboard() {
         quantity: 0.003588, // esempio, cambia con il tuo
         currency: "",
         costBasis: 94615.72 , // prezzo medio di carico
-        targetWeight: 3, // obiettivo percentuale
+        targetWeight: 4, // obiettivo percentuale
+        lastPrice: null,
+        lastUpdated: null,
+      },
+    {
+        id: "uranium",
+        name: "Uranium And Nuclear Technologies USD (Acc)",
+        identifier: "IE000M7V94E1",
+        quantity: 9.770779,
+        currency: "",
+        costBasis: 28.96 ,
+        targetWeight: 2.5,
+        lastPrice: null,
+        lastUpdated: null,
+      },
+    {
+        id: "quantum",
+        name: "VanEck Quantum Computing UCITS ETF A",
+        identifier: "IE0007Y8Y157",
+        quantity: 0,
+        currency: "",
+        costBasis: 0 ,
+        targetWeight: 2.5,
         lastPrice: null,
         lastUpdated: null,
       },
@@ -568,10 +557,9 @@ export default function PortfolioDashboard() {
     "Core MSCI EM IMI USD (Acc)": "MSCI EM",
     "Physical Gold USD (Acc)": "GOLD",
     "Uranium And Nuclear Technologies USD (Acc)": "URANIUM",
-    "MSCI Semiconductors ESG (Acc)": "SEMIC",
-    "Artificial Intelligence USD (Acc)": "AI",
-    "Global Aerospace & Defence USD (Acc)": "AERO",
     Bitcoin: "BTC",
+    "VanEck Quantum Computing UCITS ETF A" : "QUANTUM"
+    
   };
 
   // Palette per il Pie (opzionale, ma garantiamo differenze visuali; se non vuoi colori espliciti, rimuovi "fill" da <Cell>)

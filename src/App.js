@@ -101,7 +101,7 @@ export default function PortfolioDashboard() {
         quantity: 50.579514,
         currency: "",
         costBasis: 131.22,
-        targetWeight: 75,
+        targetWeight: 76,
         lastPrice: null,
         lastUpdated: null,
       },
@@ -416,7 +416,7 @@ export default function PortfolioDashboard() {
   // (manteniamo il resto del codice: stats, rebalance, grafici ecc.)
 
   // [QUI puoi copiare le sezioni "rebalance", "pieData", "barData", "lineData" e JSX dal tuo file attuale]
-  const MONTHLY_BUDGET = 1500; // € da investire ogni mese
+  const MONTHLY_BUDGET = 2500; // € da investire ogni mese
   // --- Rebalancing suggestions ---
   const rebalance = useMemo(() => {
   const tv = totals.totalValue || 0;

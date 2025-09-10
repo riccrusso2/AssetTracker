@@ -246,44 +246,53 @@ export default function PortfolioDashboard() {
 
   // --- Fetch prezzo da JustETF ---
   const fetchPriceForAsset = useCallback(async (asset) => {
-  setLoadingIds((s) => ({ ...s, [asset.id]: true }));
-  setError(null);
+    setLoadingIds((s) => ({ ...s, [asset.id]: true }));
+    setError(null);
 
-  try {
-    if (asset.ticker === "BTC") {
-      const res = await fetch(
-        https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=eur
-      );
+    try {
+      if (asset.ticker === "BTC") {
+        // fetch da un API cripto, esempio CoinGecko
+        const res = await fetch(
+          `https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=eur`
+        );
+        if (!res.ok) throw new Error(`Quote fetch failed: ${res.status}`);
+        const data = await res.json();
+        return {
+          price: data.bitcoin.eur,
+          currency: "",
+          lastUpdated: Date.now(),
+        };
+      }
+
+      const isin = asset.identifier?.trim();
+      if (!isMaybeISIN(isin)) {
+        throw new Error(`Identificatore non valido (serve un ISIN): ${isin}`);
+      }
+
+      const res = await fetch(`/api/quote?isin=${encodeURIComponent(isin)}`);
       if (!res.ok) throw new Error(`Quote fetch failed: ${res.status}`);
       const data = await res.json();
-      return { price: data.bitcoin.eur };
+
+      if (!data.latestQuote?.raw) {
+        throw new Error(`Nessun dato per ISIN ${isin}`);
+      }
+
+      return {
+        price: parseFloat(data.latestQuote.raw),
+        currency: "EUR",
+        lastUpdated: Date.now(),
+      };
+    } catch (e) {
+      setError(e.message);
+      return { price: null };
+    } finally {
+      setLoadingIds((s) => {
+        const copy = { ...s };
+        delete copy[asset.id];
+        return copy;
+      });
     }
-
-    const isin = asset.identifier?.trim();
-    if (!isMaybeISIN(isin)) {
-      throw new Error(`Identificatore non valido (serve un ISIN): ${isin}`);
-    }
-
-    const res = await fetch(/api/quote?isin=${encodeURIComponent(isin)});
-    if (!res.ok) throw new Error(`Quote fetch failed: ${res.status}`);
-    const data = await res.json();
-
-    if (!data.latestQuote?.raw) {
-      throw new Error(`Nessun dato per ISIN ${isin}`);
-    }
-
-    return { price: parseFloat(data.latestQuote.raw) };
-  } catch (e) {
-    setError(e.message);
-    return { price: null };
-  } finally {
-    setLoadingIds((s) => {
-      const copy = { ...s };
-      delete copy[asset.id];
-      return copy;
-    });
-  }
-}, []);
+  }, []);
 
   const assetsRef = useRef(assets);
   useEffect(() => {
@@ -292,18 +301,18 @@ export default function PortfolioDashboard() {
 
   const fetchAllPrices = useCallback(async () => {
     const updated = await Promise.all(
-  (assetsRef.current || []).map(async (a) => {
-    const res = await fetchPriceForAsset(a);
-    if (res.price !== null) {
-      return {
-        ...a,
-        lastPrice: res.price,
-        lastUpdated: new Date().toISOString(), // single consistent format
-      };
-    }
-    return a;
-  })
-);
+      (assetsRef.current || []).map(async (a) => {
+        const res = await fetchPriceForAsset(a);
+        if (res.price !== null) {
+          return {
+            ...a,
+            lastPrice: res.price,
+            lastUpdated: new Date().toISOString(),
+          };
+        }
+        return a;
+      })
+    );
 
     setAssets(updated);
 
@@ -564,11 +573,7 @@ export default function PortfolioDashboard() {
     "#f97316",
     "#22c55e",
   ];
-useEffect(() => {
-  fetchAllPrices();
-  intervalRef.current = setInterval(fetchAllPrices, 900000); // 15 min
-  return () => clearInterval(intervalRef.current);
-}, [fetchAllPrices]);
+
   return (
     <div className="max-w-7xl mx-auto p-4 space-y-6">
       <header className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
@@ -577,8 +582,8 @@ useEffect(() => {
             Dashboard Portafoglio — Monitoraggio & Ribilanciamento
           </h1>
           <p className="text-sm text-gray-500 flex items-center gap-1 mt-1">
-  <Info className="w-4 h-4" /> Aggiornamento automatico ogni 15 min
-</p>
+            <Info className="w-4 h-4" /> Aggiornamento automatico ogni 15s
+          </p>
         </div>
         {/* Nuovo bottone refresh globale */}
         <button

@@ -252,7 +252,7 @@ export default function PortfolioDashboard() {
   try {
     if (asset.ticker === "BTC") {
       const res = await fetch(
-        `https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=eur`
+        https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=eur
       );
       if (!res.ok) throw new Error(`Quote fetch failed: ${res.status}`);
       const data = await res.json();
@@ -264,7 +264,7 @@ export default function PortfolioDashboard() {
       throw new Error(`Identificatore non valido (serve un ISIN): ${isin}`);
     }
 
-    const res = await fetch(`/api/quote?isin=${encodeURIComponent(isin)}`);
+    const res = await fetch(/api/quote?isin=${encodeURIComponent(isin)});
     if (!res.ok) throw new Error(`Quote fetch failed: ${res.status}`);
     const data = await res.json();
 

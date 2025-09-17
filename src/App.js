@@ -854,7 +854,7 @@ const allocationData = [
 
     <div className="mt-4 flex flex-col md:flex-row gap-4 items-center">
       <div className="flex-1 h-72">
-        <ResponsiveContainer width="100%" height={288}>  {/* 72 * 4 */}
+        <ResponsiveContainer width="100%" height="100%">  {/* 72 * 4 */}
           <PieChart>
             <Pie
               data={allocationData}

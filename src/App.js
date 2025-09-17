@@ -353,30 +353,6 @@ const allocationData = [
   { name: "Private Equity", value: totalPEValue },
 ];
 
-  const totals = useMemo(() => {
-  const totalEquityValue = assets.reduce(
-    (acc, a) => acc + (a.lastPrice ? a.lastPrice * (a.quantity || 0) : 0),
-    0
-  );
-  const totalPEValue = privateEquity.reduce((acc, p) => acc + (p.invested || 0), 0);
-
-  const totalCostEquity = assets.reduce(
-    (acc, a) => acc + (a.costBasis ? a.costBasis * (a.quantity || 0) : 0),
-    0
-  );
-  const totalCostPE = totalPEValue; // assumiamo investito = costo
-
-  const totalValue = totalEquityValue + totalPEValue;
-  const totalCost = totalCostEquity + totalCostPE;
-  const totalReturn = totalCost > 0 ? (totalValue - totalCost) / totalCost : 0;
-
-  const perfArr = assets
-    .filter((a) => a.lastPrice && a.costBasis)
-    .map((a) => ({
-      id: a.id,
-      name: a.name,
-      perf: (a.lastPrice - a.costBasis) / a.costBasis,
-    }));
 
   let best = null,
     worst = null;
@@ -395,6 +371,7 @@ const allocationData = [
     totalPEValue,
   };
 }, [assets, privateEquity]);
+
 
   
   // --- Handlers ---

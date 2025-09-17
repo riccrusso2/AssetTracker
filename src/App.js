@@ -786,6 +786,7 @@ const allocationData = [
       <span className="font-semibold">{formatCurrency(totals.totalValue)}</span>
     </div>
   </div>
+</div>
 </section>
 
 

@@ -353,27 +353,6 @@ const allocationData = [
   { name: "Private Equity", value: totalPEValue },
 ];
 
-
-  let best = null,
-    worst = null;
-  if (perfArr.length) {
-    best = perfArr.reduce((p, c) => (c.perf > p.perf ? c : p));
-    worst = perfArr.reduce((p, c) => (c.perf < p.perf ? c : p));
-  }
-
-  return {
-    totalValue,
-    totalCost,
-    totalReturn,
-    best,
-    worst,
-    totalEquityValue,
-    totalPEValue,
-  };
-}, [assets, privateEquity]);
-
-
-  
   // --- Handlers ---
   const handleAddOrUpdate = async (e) => {
     e.preventDefault();

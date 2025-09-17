@@ -834,16 +834,24 @@ const allocationData = [
       <ResponsiveContainer width="100%" height="100%">
         <PieChart>
           <Pie
-            data={allocationData}
-            dataKey="value"
-            nameKey="name"
-            cx="50%"
-            cy="50%"
-            outerRadius={110}
-            label={(d) =>
-              `${d.name} (${round2((d.value / (totalEquityValue + totalPEValue)) * 100)}%)`
-            }
-          >
+  data={allocationData}
+  dataKey="value"
+  nameKey="name"
+  cx="50%"
+  cy="50%"
+  outerRadius={110}
+  label={(d) => d.name} // solo il nome
+>
+  {allocationData.map((entry, index) => (
+    <Cell key={`cell-${index}`} fill={index === 0 ? "#2563eb" : "#f59e0b"} />
+  ))}
+</Pie>
+<ReTooltip
+  formatter={(value, name) => [
+    `${round2((value / (totalEquityValue + totalPEValue)) * 100)}%`,
+    name,
+  ]}
+/>
             {allocationData.map((entry, index) => (
               <Cell key={`cell-${index}`} fill={index === 0 ? "#2563eb" : "#f59e0b"} />
             ))}
@@ -878,20 +886,32 @@ const allocationData = [
       <ResponsiveContainer width="100%" height="100%">
         <PieChart>
           <Pie
-            data={[
-              { name: "Azioni", value: totalEquityValue },
-              { name: "Private Equity", value: totalPEValue },
-              { name: "Liquidità", value: totalCash },
-            ]}
-            dataKey="value"
-            nameKey="name"
-            cx="50%"
-            cy="50%"
-            outerRadius={110}
-            label={(d) =>
-              `${d.name} (${round2((d.value / (totalEquityValue + totalPEValue + totalCash)) * 100)}%)`
-            }
-          >
+  data={[
+    { name: "Azioni", value: totalEquityValue },
+    { name: "Private Equity", value: totalPEValue },
+    { name: "Liquidità", value: totalCash },
+  ]}
+  dataKey="value"
+  nameKey="name"
+  cx="50%"
+  cy="50%"
+  outerRadius={110}
+  label={(d) => d.name} // solo il nome
+>
+  {[totalEquityValue, totalPEValue, totalCash].map((_, index) => (
+    <Cell
+      key={`cell-${index}`}
+      fill={index === 0 ? "#2563eb" : index === 1 ? "#f59e0b" : "#16a34a"}
+    />
+  ))}
+</Pie>
+<ReTooltip
+  formatter={(value, name) => [
+    `${round2((value / (totalEquityValue + totalPEValue + totalCash)) * 100)}%`,
+    name,
+  ]}
+/>
+
             {[
               totalEquityValue,
               totalPEValue,

@@ -822,40 +822,7 @@ const allocationData = [
             </ResponsiveContainer>
           </div>
         </div>
-        <div className="bg-white p-4 rounded-2xl shadow">
-          <h3 className="font-semibold mb-2 flex items-center gap-2">
-            <BarChart2 className="w-5 h-5" /> Performance per asset azionario
-          </h3>
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={barData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis
-                  dataKey="name"
-                  angle={-30} // ruota di più per ridurre sovrapposizione
-                  textAnchor="end"
-                  interval={0}
-                  height={60}
-                  tickFormatter={(name) => acronyms[name] || name} // usa acronimi
-                />
-                <YAxis unit="%" />
-                <ReTooltip formatter={(value) => `${value}%`} />
-                <Bar dataKey="performance" name="Performance %">
-                  {barData.map((entry, index) => (
-                    <Cell
-                      key={`cell-${index}`}
-                      fill={entry.performance >= 0 ? "#16a34a" : "#dc2626"}
-                    />
-                  ))}
-                  {/* Rimuoviamo LabelList per evitare sovrapposizione */}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </section>
-<section className="bg-white p-4 rounded-2xl shadow">
-  <h3 className="font-semibold mb-2 flex items-center gap-2">
+        <h3 className="font-semibold mb-2 flex items-center gap-2">
     <PieChartIcon className="w-5 h-5" /> Allocazione portafoglio: Azioni vs Private Equity
   </h3>
   <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
@@ -897,7 +864,8 @@ const allocationData = [
         </div>
       </div>
     </div>
-</section>
+
+          </section>
 
 
       {/* Suggerimenti per ribilanciamento */}

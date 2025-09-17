@@ -179,6 +179,16 @@ export default function PortfolioDashboard() {
   const [loadingIds, setLoadingIds] = useState({});
   const [error, setError] = useState(null);
   const intervalRef = useRef(null);
+  const [privateEquity, setPrivateEquity] = useState(() => {
+    const fromLS = localStorage.getItem("pf.privateEquity.v1");
+    return fromLS ? JSON.parse(fromLS) : [
+      // esempio iniziale
+      { id: cryptoRandomId(), name: "Rhyde 2.0", invested: 248 },
+      { id: cryptoRandomId(), name: "Hymalaia", invested: 300 },
+      { id: cryptoRandomId(), name: "Favikon", invested: 300 },
+      { id: cryptoRandomId(), name: "Orbital Paradigm", invested: 300 },
+    ];
+  });
 
   // --- Derived stats ---
   const totals = useMemo(() => {
@@ -331,6 +341,62 @@ export default function PortfolioDashboard() {
     return () => clearInterval(intervalRef.current);
   }, [fetchAllPrices]);
 
+
+  const totalEquityValue = assets.reduce(
+  (acc, a) => acc + (a.lastPrice ? a.lastPrice * (a.quantity || 0) : 0),
+  0
+);
+const totalPEValue = privateEquity.reduce((acc, p) => acc + (p.invested || 0), 0);
+
+const allocationData = [
+  { name: "Azioni", value: totalEquityValue },
+  { name: "Private Equity", value: totalPEValue },
+];
+
+  const totals = useMemo(() => {
+  const totalEquityValue = assets.reduce(
+    (acc, a) => acc + (a.lastPrice ? a.lastPrice * (a.quantity || 0) : 0),
+    0
+  );
+  const totalPEValue = privateEquity.reduce((acc, p) => acc + (p.invested || 0), 0);
+
+  const totalCostEquity = assets.reduce(
+    (acc, a) => acc + (a.costBasis ? a.costBasis * (a.quantity || 0) : 0),
+    0
+  );
+  const totalCostPE = totalPEValue; // assumiamo investito = costo
+
+  const totalValue = totalEquityValue + totalPEValue;
+  const totalCost = totalCostEquity + totalCostPE;
+  const totalReturn = totalCost > 0 ? (totalValue - totalCost) / totalCost : 0;
+
+  const perfArr = assets
+    .filter((a) => a.lastPrice && a.costBasis)
+    .map((a) => ({
+      id: a.id,
+      name: a.name,
+      perf: (a.lastPrice - a.costBasis) / a.costBasis,
+    }));
+
+  let best = null,
+    worst = null;
+  if (perfArr.length) {
+    best = perfArr.reduce((p, c) => (c.perf > p.perf ? c : p));
+    worst = perfArr.reduce((p, c) => (c.perf < p.perf ? c : p));
+  }
+
+  return {
+    totalValue,
+    totalCost,
+    totalReturn,
+    best,
+    worst,
+    totalEquityValue,
+    totalPEValue,
+  };
+}, [assets, privateEquity]);
+
+  
   // --- Handlers ---
   const handleAddOrUpdate = async (e) => {
     e.preventDefault();
@@ -599,7 +665,7 @@ export default function PortfolioDashboard() {
 
       {/* Tabella asset */}
       <section className="bg-white p-4 rounded-2xl shadow">
-        <h2 className="font-semibold mb-4">Asset nel portafoglio</h2>
+        <h2 className="font-semibold mb-4">Asset nel portafoglio azionario</h2>
         <div className="overflow-x-auto">
           <table className="w-full text-sm border-collapse">
             <thead>
@@ -684,6 +750,29 @@ export default function PortfolioDashboard() {
         </div>
       </section>
 
+      <section className="bg-white p-4 rounded-2xl shadow">
+  <h2 className="font-semibold mb-4">Investimenti Private Equity</h2>
+  <div className="overflow-x-auto">
+    <table className="w-full text-sm border-collapse">
+      <thead>
+        <tr className="bg-gray-50 text-gray-600 border-b">
+          <th className="py-2 px-3 text-left">Nome startup</th>
+          <th className="px-3 text-right">Importo investito</th>
+        </tr>
+      </thead>
+      <tbody>
+        {privateEquity.map((p, i) => (
+          <tr key={p.id} className={`border-b ${i % 2 === 0 ? "bg-white" : "bg-gray-50"} hover:bg-gray-100`}>
+            <td className="py-2 px-3 font-medium">{p.name}</td>
+            <td className="px-3 text-right">{formatCurrency(p.invested)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+
       {/* Statistiche automatiche */}
       <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-white p-4 rounded-2xl shadow">
@@ -720,44 +809,41 @@ export default function PortfolioDashboard() {
             <div className="text-gray-500">Dati insufficienti</div>
           )}
         </div>
-        <div className="bg-white p-4 rounded-2xl shadow">
-          <h3 className="font-semibold mb-2 flex items-center gap-2">
-            <Target className="w-5 h-5" /> Rendimento totale portafoglio
-          </h3>
+        <section className="bg-white p-4 rounded-2xl shadow">
+  <h3 className="font-semibold mb-2 flex items-center gap-2">
+    <Target className="w-5 h-5" /> Rendimento totale portafoglio
+  </h3>
 
-          {/* Rendimento in percentuale */}
-          <div
-            className={`text-3xl font-bold ${
-              totals.totalReturn >= 0 ? "text-green-600" : "text-red-600"
-            }`}
-          >
-            {(totals.totalReturn * 100).toFixed(2)}%
-          </div>
+  <div
+    className={`text-3xl font-bold ${
+      totals.totalReturn >= 0 ? "text-green-600" : "text-red-600"
+    }`}
+  >
+    {(totals.totalReturn * 100).toFixed(2)}%
+  </div>
 
-          {/* Valori in euro */}
-          <div className="mt-2 text-sm space-y-1">
-            <div>
-              <span className="text-gray-500">Capitale investito: </span>
-              <span className="font-semibold">
-                {formatCurrency(totals.totalCost)}
-              </span>
-            </div>
-            <div>
-              <span className="text-gray-500">Valore attuale: </span>
-              <span className="font-semibold">
-                {formatCurrency(totals.totalValue)}
-              </span>
-            </div>
-          </div>
-        </div>
-      </section>
+  <div className="mt-2 text-sm space-y-1">
+    <div>
+      <span className="text-gray-500">Capitale investito: </span>
+      <span className="font-semibold">{formatCurrency(totals.totalCost)}</span>
+    </div>
+    <div>
+      <span className="text-gray-500">Valore attuale: </span>
+      <span className="font-semibold">{formatCurrency(totals.totalValue)}</span>
+    </div>
+    <div className="mt-2 text-gray-500 text-xs">
+      Dettaglio: {formatCurrency(totals.totalEquityValue)} in azioni + {formatCurrency(totals.totalPEValue)} in private equity
+    </div>
+  </div>
+</section>
+
 
       {/* Grafici */}
 
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="bg-white p-4 rounded-2xl shadow">
           <h3 className="font-semibold mb-2 flex items-center gap-2">
-            <PieChartIcon className="w-5 h-5" /> Distribuzione del portafoglio
+            <PieChartIcon className="w-5 h-5" /> Distribuzione del portafoglio azionario
           </h3>
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
@@ -786,7 +872,7 @@ export default function PortfolioDashboard() {
         </div>
         <div className="bg-white p-4 rounded-2xl shadow">
           <h3 className="font-semibold mb-2 flex items-center gap-2">
-            <BarChart2 className="w-5 h-5" /> Performance per asset
+            <BarChart2 className="w-5 h-5" /> Performance per asset azionario
           </h3>
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
@@ -816,6 +902,32 @@ export default function PortfolioDashboard() {
           </div>
         </div>
       </section>
+<section className="bg-white p-4 rounded-2xl shadow">
+  <h3 className="font-semibold mb-2 flex items-center gap-2">
+    <PieChartIcon className="w-5 h-5" /> Allocazione portafoglio: Azioni vs Private Equity
+  </h3>
+  <div className="h-72">
+    <ResponsiveContainer width="100%" height="100%">
+      <PieChart>
+        <Pie
+          data={allocationData}
+          dataKey="value"
+          nameKey="name"
+          cx="50%"
+          cy="50%"
+          outerRadius={110}
+          label={(d) => `${d.name} (${round2((d.value / (totalEquityValue + totalPEValue)) * 100)}%)`}
+        >
+          {allocationData.map((entry, index) => (
+            <Cell key={`cell-${index}`} fill={index === 0 ? "#2563eb" : "#f59e0b"} />
+          ))}
+        </Pie>
+        <ReTooltip formatter={(value, name) => [formatCurrency(value), name]} />
+      </PieChart>
+    </ResponsiveContainer>
+  </div>
+</section>
+
 
       {/* Suggerimenti per ribilanciamento */}
       <section className="bg-white p-4 rounded-2xl shadow">

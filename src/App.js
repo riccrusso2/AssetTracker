@@ -856,8 +856,7 @@ const allocationData = [
             </ResponsiveContainer>
           </div>
         </div>
-      </section>
-<section className="bg-white p-4 rounded-2xl shadow">
+<div className="bg-white p-4 rounded-2xl shadow">
   <h3 className="font-semibold mb-2 flex items-center gap-2">
     <PieChartIcon className="w-5 h-5" /> Allocazione portafoglio: Azioni vs Private Equity
   </h3>

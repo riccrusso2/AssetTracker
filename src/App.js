@@ -822,49 +822,50 @@ const allocationData = [
             </ResponsiveContainer>
           </div>
         </div>
-        <h3 className="font-semibold mb-2 flex items-center gap-2">
+        <div className="bg-white p-4 rounded-2xl shadow">
+  <h3 className="font-semibold mb-4 flex items-center gap-2">
     <PieChartIcon className="w-5 h-5" /> Allocazione portafoglio: Azioni vs Private Equity
   </h3>
-  <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
-  <div className="h-72">
-    <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie
-              data={allocationData}
-              dataKey="value"
-              nameKey="name"
-              cx="50%"
-              cy="50%"
-              outerRadius={110}
-              label={(d) =>
-                `${d.name} (${round2((d.value / (totalEquityValue + totalPEValue)) * 100)}%)`
-              }
-            >
-              {allocationData.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={index === 0 ? "#2563eb" : "#f59e0b"} />
-              ))}
-            </Pie>
-            <ReTooltip formatter={(value, name) => [formatCurrency(value), name]} />
-          </PieChart>
-        </ResponsiveContainer>
-      </div>
 
-      {/* Dettaglio accanto al grafico */}
-      <div className="flex-1 space-y-1 text-sm text-gray-700">
-        <div>
-          <span className="font-semibold">Azioni: </span>
-          {formatCurrency(totalEquityValue)}
-        </div>
-        <div>
-          <span className="font-semibold">Private Equity: </span>
-          {formatCurrency(totalPEValue)}
-        </div>
-        <div className="mt-2 font-semibold">
-          Totale: {formatCurrency(totalEquityValue + totalPEValue)}
-        </div>
-      </div>
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+    <div className="h-72 w-full">
+      <ResponsiveContainer width="100%" height="100%">
+        <PieChart>
+          <Pie
+            data={allocationData}
+            dataKey="value"
+            nameKey="name"
+            cx="50%"
+            cy="50%"
+            outerRadius={110}
+            label={(d) =>
+              `${d.name} (${round2((d.value / (totalEquityValue + totalPEValue)) * 100)}%)`
+            }
+          >
+            {allocationData.map((entry, index) => (
+              <Cell key={`cell-${index}`} fill={index === 0 ? "#2563eb" : "#f59e0b"} />
+            ))}
+          </Pie>
+          <ReTooltip formatter={(value, name) => [formatCurrency(value), name]} />
+        </PieChart>
+      </ResponsiveContainer>
     </div>
 
+    <div className="flex flex-col justify-center space-y-1 text-sm text-gray-700">
+      <div>
+        <span className="font-semibold">Azioni: </span>
+        {formatCurrency(totalEquityValue)}
+      </div>
+      <div>
+        <span className="font-semibold">Private Equity: </span>
+        {formatCurrency(totalPEValue)}
+      </div>
+      <div className="mt-2 font-semibold">
+        Totale: {formatCurrency(totalEquityValue + totalPEValue)}
+      </div>
+    </div>
+  </div>
+</div>
           </section>
 
 

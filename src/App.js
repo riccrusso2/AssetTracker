@@ -785,11 +785,7 @@ const allocationData = [
       <span className="text-gray-500">Valore attuale: </span>
       <span className="font-semibold">{formatCurrency(totals.totalValue)}</span>
     </div>
-    <div className="mt-2 text-gray-500 text-xs">
-      Dettaglio: {formatCurrency(totalEquityValue)} in azioni + {formatCurrency(totalPEValue)} in private equity
-    </div>
   </div>
-</div>
 </section>
 
 
@@ -858,11 +854,8 @@ const allocationData = [
     </div>
   </div>
 
-  <div className="bg-white p-4 rounded-2xl shadow">
-    <h3 className="font-semibold mb-2 flex items-center gap-2">
-      <PieChartIcon className="w-5 h-5" /> Allocazione portafoglio: Azioni vs Private Equity
-    </h3>
-    <div className="h-72">
+   <div className="mt-4 flex flex-col md:flex-row gap-4 items-center">
+    <div className="flex-1 h-72">
       <ResponsiveContainer width="100%" height="100%">
         <PieChart>
           <Pie
@@ -887,7 +880,23 @@ const allocationData = [
         </PieChart>
       </ResponsiveContainer>
     </div>
+
+    {/* Dettaglio accanto al grafico */}
+    <div className="flex-1 space-y-1 text-sm text-gray-700">
+      <div>
+        <span className="font-semibold">Azioni: </span>
+        {formatCurrency(totalEquityValue)}
+      </div>
+      <div>
+        <span className="font-semibold">Private Equity: </span>
+        {formatCurrency(totalPEValue)}
+      </div>
+      <div className="mt-2 font-semibold">
+        Totale: {formatCurrency(totalEquityValue + totalPEValue)}
+      </div>
+    </div>
   </div>
+</div>
 </section>
 
 

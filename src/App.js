@@ -832,11 +832,11 @@ const allocationData = [
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis
             dataKey="name"
-            angle={-30} // ruota di più per ridurre sovrapposizione
+            angle={-30}
             textAnchor="end"
             interval={0}
             height={60}
-            tickFormatter={(name) => acronyms[name] || name} // usa acronimi
+            tickFormatter={(name) => acronyms[name] || name}
           />
           <YAxis unit="%" />
           <ReTooltip formatter={(value) => `${value}%`} />

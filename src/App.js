@@ -807,13 +807,10 @@ const allocationData = [
             cx="50%"
             cy="50%"
             outerRadius={110}
-            label={(d) => acronyms[d.name] || d.name} // usa acronimi
+            label={(d) => acronyms[d.name] || d.name}
           >
             {pieData.map((entry, index) => (
-              <Cell
-                key={`cell-${index}`}
-                fill={COLORS[index % COLORS.length]}
-              />
+              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
             ))}
           </Pie>
           <ReTooltip formatter={(value, name) => [`${value}%`, name]} />
@@ -822,83 +819,80 @@ const allocationData = [
     </div>
   </div>
 
-            <section>
-            
-  <div className="bg-white p-4 rounded-2xl shadow">
-    <h3 className="font-semibold mb-2 flex items-center gap-2">
-      <BarChart2 className="w-5 h-5" /> Performance per asset azionario
-    </h3>
-    <div className="h-72">
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={barData}>
-          <CartesianGrid strokeDasharray="3 3" />
-          <XAxis
-            dataKey="name"
-            angle={-30}
-            textAnchor="end"
-            interval={0}
-            height={60}
-            tickFormatter={(name) => acronyms[name] || name}
-          />
-          <YAxis unit="%" />
-          <ReTooltip formatter={(value) => `${value}%`} />
-          <Bar dataKey="performance" name="Performance %">
-            {barData.map((entry, index) => (
-              <Cell
-                key={`cell-${index}`}
-                fill={entry.performance >= 0 ? "#16a34a" : "#dc2626"}
-              />
-            ))}
-            {/* Rimuoviamo LabelList per evitare sovrapposizione */}
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
-    </div>
-  </div>
-
-  <div className="mt-4 flex flex-col md:flex-row gap-4 items-center">
-    <div className="flex-1 h-72">
-      <ResponsiveContainer width="100%" height="100%">
-        <PieChart>
-          <Pie
-            data={allocationData}
-            dataKey="value"
-            nameKey="name"
-            cx="50%"
-            cy="50%"
-            outerRadius={110}
-            label={(d) =>
-              `${d.name} (${round2((d.value / (totalEquityValue + totalPEValue)) * 100)}%)`
-            }
-          >
-            {allocationData.map((entry, index) => (
-              <Cell
-                key={`cell-${index}`}
-                fill={index === 0 ? "#2563eb" : "#f59e0b"}
-              />
-            ))}
-          </Pie>
-          <ReTooltip formatter={(value, name) => [formatCurrency(value), name]} />
-        </PieChart>
-      </ResponsiveContainer>
+  <section>
+    <div className="bg-white p-4 rounded-2xl shadow">
+      <h3 className="font-semibold mb-2 flex items-center gap-2">
+        <BarChart2 className="w-5 h-5" /> Performance per asset azionario
+      </h3>
+      <div className="h-72">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={barData}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis
+              dataKey="name"
+              angle={-30}
+              textAnchor="end"
+              interval={0}
+              height={60}
+              tickFormatter={(name) => acronyms[name] || name}
+            />
+            <YAxis unit="%" />
+            <ReTooltip formatter={(value) => `${value}%`} />
+            <Bar dataKey="performance" name="Performance %">
+              {barData.map((entry, index) => (
+                <Cell
+                  key={`cell-${index}`}
+                  fill={entry.performance >= 0 ? "#16a34a" : "#dc2626"}
+                />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
     </div>
 
-    {/* Dettaglio accanto al grafico */}
-    <div className="flex-1 space-y-1 text-sm text-gray-700">
-      <div>
-        <span className="font-semibold">Azioni: </span>
-        {formatCurrency(totalEquityValue)}
+    <div className="mt-4 flex flex-col md:flex-row gap-4 items-center">
+      <div className="flex-1 h-72">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie
+              data={allocationData}
+              dataKey="value"
+              nameKey="name"
+              cx="50%"
+              cy="50%"
+              outerRadius={110}
+              label={(d) =>
+                `${d.name} (${round2((d.value / (totalEquityValue + totalPEValue)) * 100)}%)`
+              }
+            >
+              {allocationData.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={index === 0 ? "#2563eb" : "#f59e0b"} />
+              ))}
+            </Pie>
+            <ReTooltip formatter={(value, name) => [formatCurrency(value), name]} />
+          </PieChart>
+        </ResponsiveContainer>
       </div>
-      <div>
-        <span className="font-semibold">Private Equity: </span>
-        {formatCurrency(totalPEValue)}
-      </div>
-      <div className="mt-2 font-semibold">
-        Totale: {formatCurrency(totalEquityValue + totalPEValue)}
+
+      {/* Dettaglio accanto al grafico */}
+      <div className="flex-1 space-y-1 text-sm text-gray-700">
+        <div>
+          <span className="font-semibold">Azioni: </span>
+          {formatCurrency(totalEquityValue)}
+        </div>
+        <div>
+          <span className="font-semibold">Private Equity: </span>
+          {formatCurrency(totalPEValue)}
+        </div>
+        <div className="mt-2 font-semibold">
+          Totale: {formatCurrency(totalEquityValue + totalPEValue)}
+        </div>
       </div>
     </div>
-  </div>
+  </section>
 </section>
+
 
 
 

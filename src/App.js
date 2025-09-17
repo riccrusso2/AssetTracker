@@ -796,91 +796,100 @@ const allocationData = [
       {/* Grafici */}
 
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="bg-white p-4 rounded-2xl shadow">
-          <h3 className="font-semibold mb-2 flex items-center gap-2">
-            <PieChartIcon className="w-5 h-5" /> Distribuzione del portafoglio azionario
-          </h3>
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                {/* Tooltip con nome completo e valore */}
-                <Pie
-                  data={pieData}
-                  dataKey="value"
-                  nameKey="name"
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={110}
-                  label={(d) => acronyms[d.name] || d.name} // usa acronimi
-                >
-                  {pieData.map((entry, index) => (
-                    <Cell
-                      key={`cell-${index}`}
-                      fill={COLORS[index % COLORS.length]}
-                    />
-                  ))}
-                </Pie>
-                <ReTooltip formatter={(value, name) => [`${value}%`, name]} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-        <div className="bg-white p-4 rounded-2xl shadow">
-          <h3 className="font-semibold mb-2 flex items-center gap-2">
-            <BarChart2 className="w-5 h-5" /> Performance per asset azionario
-          </h3>
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={barData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis
-                  dataKey="name"
-                  angle={-30} // ruota di più per ridurre sovrapposizione
-                  textAnchor="end"
-                  interval={0}
-                  height={60}
-                  tickFormatter={(name) => acronyms[name] || name} // usa acronimi
-                />
-                <YAxis unit="%" />
-                <ReTooltip formatter={(value) => `${value}%`} />
-                <Bar dataKey="performance" name="Performance %">
-                  {barData.map((entry, index) => (
-                    <Cell
-                      key={`cell-${index}`}
-                      fill={entry.performance >= 0 ? "#16a34a" : "#dc2626"}
-                    />
-                  ))}
-                  {/* Rimuoviamo LabelList per evitare sovrapposizione */}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-<div className="bg-white p-4 rounded-2xl shadow">
-  <h3 className="font-semibold mb-2 flex items-center gap-2">
-    <PieChartIcon className="w-5 h-5" /> Allocazione portafoglio: Azioni vs Private Equity
-  </h3>
-  <div className="h-72">
-    <ResponsiveContainer width="100%" height="100%">
-      <PieChart>
-        <Pie
-          data={allocationData}
-          dataKey="value"
-          nameKey="name"
-          cx="50%"
-          cy="50%"
-          outerRadius={110}
-          label={(d) => `${d.name} (${round2((d.value / (totalEquityValue + totalPEValue)) * 100)}%)`}
-        >
-          {allocationData.map((entry, index) => (
-            <Cell key={`cell-${index}`} fill={index === 0 ? "#2563eb" : "#f59e0b"} />
-          ))}
-        </Pie>
-        <ReTooltip formatter={(value, name) => [formatCurrency(value), name]} />
-      </PieChart>
-    </ResponsiveContainer>
+  <div className="bg-white p-4 rounded-2xl shadow">
+    <h3 className="font-semibold mb-2 flex items-center gap-2">
+      <PieChartIcon className="w-5 h-5" /> Distribuzione del portafoglio azionario
+    </h3>
+    <div className="h-72">
+      <ResponsiveContainer width="100%" height="100%">
+        <PieChart>
+          {/* Tooltip con nome completo e valore */}
+          <Pie
+            data={pieData}
+            dataKey="value"
+            nameKey="name"
+            cx="50%"
+            cy="50%"
+            outerRadius={110}
+            label={(d) => acronyms[d.name] || d.name} // usa acronimi
+          >
+            {pieData.map((entry, index) => (
+              <Cell
+                key={`cell-${index}`}
+                fill={COLORS[index % COLORS.length]}
+              />
+            ))}
+          </Pie>
+          <ReTooltip formatter={(value, name) => [`${value}%`, name]} />
+        </PieChart>
+      </ResponsiveContainer>
+    </div>
+  </div>
+
+  <div className="bg-white p-4 rounded-2xl shadow">
+    <h3 className="font-semibold mb-2 flex items-center gap-2">
+      <BarChart2 className="w-5 h-5" /> Performance per asset azionario
+    </h3>
+    <div className="h-72">
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={barData}>
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis
+            dataKey="name"
+            angle={-30} // ruota di più per ridurre sovrapposizione
+            textAnchor="end"
+            interval={0}
+            height={60}
+            tickFormatter={(name) => acronyms[name] || name} // usa acronimi
+          />
+          <YAxis unit="%" />
+          <ReTooltip formatter={(value) => `${value}%`} />
+          <Bar dataKey="performance" name="Performance %">
+            {barData.map((entry, index) => (
+              <Cell
+                key={`cell-${index}`}
+                fill={entry.performance >= 0 ? "#16a34a" : "#dc2626"}
+              />
+            ))}
+            {/* Rimuoviamo LabelList per evitare sovrapposizione */}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  </div>
+
+  <div className="bg-white p-4 rounded-2xl shadow">
+    <h3 className="font-semibold mb-2 flex items-center gap-2">
+      <PieChartIcon className="w-5 h-5" /> Allocazione portafoglio: Azioni vs Private Equity
+    </h3>
+    <div className="h-72">
+      <ResponsiveContainer width="100%" height="100%">
+        <PieChart>
+          <Pie
+            data={allocationData}
+            dataKey="value"
+            nameKey="name"
+            cx="50%"
+            cy="50%"
+            outerRadius={110}
+            label={(d) =>
+              `${d.name} (${round2((d.value / (totalEquityValue + totalPEValue)) * 100)}%)`
+            }
+          >
+            {allocationData.map((entry, index) => (
+              <Cell
+                key={`cell-${index}`}
+                fill={index === 0 ? "#2563eb" : "#f59e0b"}
+              />
+            ))}
+          </Pie>
+          <ReTooltip formatter={(value, name) => [formatCurrency(value), name]} />
+        </PieChart>
+      </ResponsiveContainer>
+    </div>
   </div>
 </section>
+
 
 
       {/* Suggerimenti per ribilanciamento */}

@@ -439,6 +439,8 @@ const allocationData = [
 
   // [QUI puoi copiare le sezioni "rebalance", "pieData", "barData", "lineData" e JSX dal tuo file attuale]
   const MONTHLY_BUDGET = 1500; // € da investire ogni mese
+  const totalCash = 10000; // esempio, la liquidità totale
+  
   // --- Rebalancing suggestions ---
   const rebalance = useMemo(() => {
   const tv = totals.totalValue || 0;
@@ -866,6 +868,68 @@ const allocationData = [
     </div>
   </div>
 </div>
+        <div className="bg-white p-4 rounded-2xl shadow mt-4">
+  <h3 className="font-semibold mb-4 flex items-center gap-2">
+    <PieChartIcon className="w-5 h-5" /> Allocazione portafoglio: Azioni vs Private Equity vs Liquidità
+  </h3>
+
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+    <div className="h-72 w-full">
+      <ResponsiveContainer width="100%" height="100%">
+        <PieChart>
+          <Pie
+            data={[
+              { name: "Azioni", value: totalEquityValue },
+              { name: "Private Equity", value: totalPEValue },
+              { name: "Liquidità", value: totalCash },
+            ]}
+            dataKey="value"
+            nameKey="name"
+            cx="50%"
+            cy="50%"
+            outerRadius={110}
+            label={(d) =>
+              `${d.name} (${round2((d.value / (totalEquityValue + totalPEValue + totalCash)) * 100)}%)`
+            }
+          >
+            {[
+              totalEquityValue,
+              totalPEValue,
+              totalCash,
+            ].map((_, index) => (
+              <Cell
+                key={`cell-${index}`}
+                fill={index === 0 ? "#2563eb" : index === 1 ? "#f59e0b" : "#16a34a"}
+              />
+            ))}
+          </Pie>
+          <ReTooltip
+            formatter={(value, name) => [formatCurrency(value), name]}
+          />
+        </PieChart>
+      </ResponsiveContainer>
+    </div>
+
+    <div className="flex flex-col justify-center space-y-1 text-sm text-gray-700">
+      <div>
+        <span className="font-semibold">Azioni: </span>
+        {formatCurrency(totalEquityValue)}
+      </div>
+      <div>
+        <span className="font-semibold">Private Equity: </span>
+        {formatCurrency(totalPEValue)}
+      </div>
+      <div>
+        <span className="font-semibold">Liquidità: </span>
+        {formatCurrency(totalCash)}
+      </div>
+      <div className="mt-2 font-semibold">
+        Totale: {formatCurrency(totalEquityValue + totalPEValue + totalCash)}
+      </div>
+    </div>
+  </div>
+</div>
+
           </section>
 
 

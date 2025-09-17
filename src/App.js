@@ -765,11 +765,10 @@ const allocationData = [
             <div className="text-gray-500">Dati insufficienti</div>
           )}
         </div>
-        <section className="bg-white p-4 rounded-2xl shadow">
+        <div className="bg-white p-4 rounded-2xl shadow">
   <h3 className="font-semibold mb-2 flex items-center gap-2">
     <Target className="w-5 h-5" /> Rendimento totale portafoglio
   </h3>
-
   <div
     className={`text-3xl font-bold ${
       totals.totalReturn >= 0 ? "text-green-600" : "text-red-600"
@@ -777,7 +776,6 @@ const allocationData = [
   >
     {(totals.totalReturn * 100).toFixed(2)}%
   </div>
-
   <div className="mt-2 text-sm space-y-1">
     <div>
       <span className="text-gray-500">Capitale investito: </span>
@@ -791,6 +789,7 @@ const allocationData = [
       Dettaglio: {formatCurrency(totalEquityValue)} in azioni + {formatCurrency(totalPEValue)} in private equity
     </div>
   </div>
+</div>
 </section>
 
 

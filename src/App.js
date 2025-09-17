@@ -822,6 +822,8 @@ const allocationData = [
     </div>
   </div>
 
+            <section>
+            
   <div className="bg-white p-4 rounded-2xl shadow">
     <h3 className="font-semibold mb-2 flex items-center gap-2">
       <BarChart2 className="w-5 h-5" /> Performance per asset azionario

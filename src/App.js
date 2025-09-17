@@ -788,7 +788,7 @@ const allocationData = [
       <span className="font-semibold">{formatCurrency(totals.totalValue)}</span>
     </div>
     <div className="mt-2 text-gray-500 text-xs">
-      Dettaglio: {formatCurrency(totals.totalEquityValue)} in azioni + {formatCurrency(totals.totalPEValue)} in private equity
+      Dettaglio: {formatCurrency(totalEquityValue)} in azioni + {formatCurrency(totalPEValue)} in private equity
     </div>
   </div>
 </section>

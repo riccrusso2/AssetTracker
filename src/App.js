@@ -834,7 +834,11 @@ const allocationData = [
       <ResponsiveContainer width="100%" height="100%">
         <PieChart>
           <Pie
-  data={allocationData}
+  data={[
+    { name: "Azioni", value: totalEquityValue },
+    { name: "Private Equity", value: totalPEValue },
+    { name: "Liquidità", value: totalCash },
+  ]}
   dataKey="value"
   nameKey="name"
   cx="50%"
@@ -842,21 +846,20 @@ const allocationData = [
   outerRadius={110}
   label={(d) => d.name} // solo il nome
 >
-  {allocationData.map((entry, index) => (
-    <Cell key={`cell-${index}`} fill={index === 0 ? "#2563eb" : "#f59e0b"} />
+  {[totalEquityValue, totalPEValue, totalCash].map((_, index) => (
+    <Cell
+      key={`cell-${index}`}
+      fill={index === 0 ? "#2563eb" : index === 1 ? "#f59e0b" : "#16a34a"}
+    />
   ))}
 </Pie>
 <ReTooltip
   formatter={(value, name) => [
-    `${round2((value / (totalEquityValue + totalPEValue)) * 100)}%`,
+    `${round2((value / (totalEquityValue + totalPEValue + totalCash)) * 100)}%`,
     name,
   ]}
 />
-            {allocationData.map((entry, index) => (
-              <Cell key={`cell-${index}`} fill={index === 0 ? "#2563eb" : "#f59e0b"} />
-            ))}
-          </Pie>
-          <ReTooltip formatter={(value, name) => [formatCurrency(value), name]} />
+
         </PieChart>
       </ResponsiveContainer>
     </div>

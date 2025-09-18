@@ -180,15 +180,16 @@ export default function PortfolioDashboard() {
   const [error, setError] = useState(null);
   const intervalRef = useRef(null);
   const [privateEquity, setPrivateEquity] = useState(() => {
-    const fromLS = localStorage.getItem("pf.privateEquity.v1");
-    return fromLS ? JSON.parse(fromLS) : [
-      // esempio iniziale
-      { id: cryptoRandomId(), name: "Rhyde 2.0", invested: 248 },
-      { id: cryptoRandomId(), name: "Hymalaia", invested: 300 },
-      { id: cryptoRandomId(), name: "Favikon", invested: 300 },
-      { id: cryptoRandomId(), name: "Orbital Paradigm", invested: 300 },
-    ];
-  });
+  const fromLS = localStorage.getItem("pf.privateEquity.v1");
+  return fromLS ? JSON.parse(fromLS) : [
+    // esempio iniziale
+    { id: cryptoRandomId(), name: "Rhyde 2.0", invested: 248, fee: 19.84 },
+    { id: cryptoRandomId(), name: "Hymalaia", invested: 300, fee: 24 },
+    { id: cryptoRandomId(), name: "Favikon", invested: 300, fee: 24 },
+    { id: cryptoRandomId(), name: "Orbital Paradigm", invested: 300, fee: 24 },
+  ];
+});
+
 
   // --- Derived stats ---
   const totals = useMemo(() => {
@@ -715,13 +716,18 @@ const allocationData = [
       <thead>
         <tr className="bg-gray-50 text-gray-600 border-b">
           <th className="py-2 px-3 text-left">Nome startup</th>
+          <th className="px-3 text-right">Commissioni</th>
           <th className="px-3 text-right">Importo investito</th>
         </tr>
       </thead>
       <tbody>
         {privateEquity.map((p, i) => (
-          <tr key={p.id} className={`border-b ${i % 2 === 0 ? "bg-white" : "bg-gray-50"} hover:bg-gray-100`}>
+          <tr
+            key={p.id}
+            className={`border-b ${i % 2 === 0 ? "bg-white" : "bg-gray-50"} hover:bg-gray-100`}
+          >
             <td className="py-2 px-3 font-medium">{p.name}</td>
+            <td className="px-3 text-right">{formatCurrency(p.fee)}</td>
             <td className="px-3 text-right">{formatCurrency(p.invested)}</td>
           </tr>
         ))}
@@ -729,6 +735,7 @@ const allocationData = [
     </table>
   </div>
 </section>
+
 
 
       {/* Statistiche automatiche */}

@@ -110,9 +110,9 @@ export default function PortfolioDashboard() {
         id: "coremsciemimi",
         name: "Core MSCI EM IMI USD (Acc)",
         identifier: "IE00BKM4GZ66",
-        quantity: 0,
+        quantity: 8.108108,
         currency: "",
-        costBasis: 0,
+        costBasis: 37.12,
         targetWeight: 4 ,
         lastPrice: null,
         lastUpdated: null,
@@ -476,7 +476,7 @@ const allocationData = [
   // (manteniamo il resto del codice: stats, rebalance, grafici ecc.)
 
   // [QUI puoi copiare le sezioni "rebalance", "pieData", "barData", "lineData" e JSX dal tuo file attuale]
-  const MONTHLY_BUDGET = 2000; // € da investire ogni mese
+  const MONTHLY_BUDGET = 1600; // € da investire ogni mese
   const totalCash = 10000; // esempio, la liquidità totale
   
   // --- Rebalancing suggestions ---

@@ -101,7 +101,7 @@ export default function PortfolioDashboard() {
         quantity: 58.02327,
         currency: "",
         costBasis: 132.05,
-        targetWeight: 78,
+        targetWeight: 75,
         lastPrice: null,
         lastUpdated: null,
         assetClass: "ETF", 
@@ -112,8 +112,8 @@ export default function PortfolioDashboard() {
         identifier: "IE00BKM4GZ66",
         quantity: 16.321397,
         currency: "",
-        costBasis: 32.15,
-        targetWeight: 5,
+        costBasis: 0,
+        targetWeight: 3 ,
         lastPrice: null,
         lastUpdated: null,
         assetClass: "ETF", 
@@ -173,9 +173,9 @@ export default function PortfolioDashboard() {
     name: "EQT Nexus ELTIF",
     identifier: "LU3176111881",
     quantity: 1, // o quante quote hai
-    currency: "EUR",
+    currency: "",
     costBasis: 250,
-    targetWeight: 0, // puoi metterlo al valore desiderato
+    targetWeight: 2.5, // puoi metterlo al valore desiderato
     lastPrice: 250, // inizialmente uguale al costo di carico
     lastUpdated: null,
     assetClass: "Private equity",
@@ -186,9 +186,9 @@ export default function PortfolioDashboard() {
     name: "Apollo Global Private Markets ELTIF",
     identifier: "LU3170240538",
     quantity: 1,
-    currency: "EUR",
+    currency: "",
     costBasis: 250,
-    targetWeight: 0,
+    targetWeight: 2.5,
     lastPrice: 250,
     lastUpdated: null,
     assetClass: "Private equity",

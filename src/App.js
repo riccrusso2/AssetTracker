@@ -168,6 +168,32 @@ export default function PortfolioDashboard() {
         lastUpdated: null,
       assetClass: "ETF", 
       },
+    {
+    id: "eqt-nexus",
+    name: "EQT Nexus ELTIF",
+    identifier: "LU3176111881",
+    quantity: 1, // o quante quote hai
+    currency: "EUR",
+    costBasis: 250,
+    targetWeight: 0, // puoi metterlo al valore desiderato
+    lastPrice: 250, // inizialmente uguale al costo di carico
+    lastUpdated: null,
+    assetClass: "Private equity",
+    manual: true, // 🔹 flag custom per saltare fetch
+  },
+  {
+    id: "apollo-global",
+    name: "Apollo Global Private Markets ELTIF",
+    identifier: "LU3170240538",
+    quantity: 1,
+    currency: "EUR",
+    costBasis: 250,
+    targetWeight: 0,
+    lastPrice: 250,
+    lastUpdated: null,
+    assetClass: "Private equity",
+    manual: true, // 🔹 flag custom per saltare fetch
+  },
     ];
   });
 
@@ -268,6 +294,10 @@ export default function PortfolioDashboard() {
     setError(null);
 
     try {
+      if (asset.manual) {
+  // asset aggiornato solo manualmente
+  return { price: asset.lastPrice, currency: "EUR", lastUpdated: Date.now() };
+}
       if (asset.ticker === "BTC") {
         // fetch da un API cripto, esempio CoinGecko
         const res = await fetch(
@@ -631,7 +661,7 @@ const allocationData = [
 
       {/* Tabella asset */}
       <section className="bg-white p-4 rounded-2xl shadow">
-        <h2 className="font-semibold mb-4">Asset nel portafoglio azionario</h2>
+        <h2 className="font-semibold mb-4">Asset nel portafoglio</h2>
         <div className="overflow-x-auto">
           <table className="w-full text-sm border-collapse">
             <thead>
@@ -779,7 +809,7 @@ const allocationData = [
         </div>
         <div className="bg-white p-4 rounded-2xl shadow">
   <h3 className="font-semibold mb-2 flex items-center gap-2">
-    <Target className="w-5 h-5" /> Rendimento portafoglio azionario
+    <Target className="w-5 h-5" /> Rendimento portafoglio
   </h3>
   <div
     className={`text-3xl font-bold ${

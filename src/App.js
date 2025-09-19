@@ -172,11 +172,11 @@ export default function PortfolioDashboard() {
     id: "eqt-nexus",
     name: "EQT Nexus ELTIF",
     identifier: "LU3176111881",
-    quantity: 1, // o quante quote hai
+    quantity: 0, // o quante quote hai
     currency: "",
-    costBasis: 250,
+    costBasis: 0,
     targetWeight: 2.5, // puoi metterlo al valore desiderato
-    lastPrice: 250, // inizialmente uguale al costo di carico
+    lastPrice: 0, // inizialmente uguale al costo di carico
     lastUpdated: null,
     assetClass: "Private equity",
     manual: true, // 🔹 flag custom per saltare fetch
@@ -185,11 +185,11 @@ export default function PortfolioDashboard() {
     id: "apollo-global",
     name: "Apollo Global Private Markets ELTIF",
     identifier: "LU3170240538",
-    quantity: 1,
+    quantity: 0,
     currency: "",
-    costBasis: 250,
+    costBasis: 0,
     targetWeight: 2.5,
-    lastPrice: 250,
+    lastPrice: 0,
     lastUpdated: null,
     assetClass: "Private equity",
     manual: true, // 🔹 flag custom per saltare fetch

@@ -104,6 +104,7 @@ export default function PortfolioDashboard() {
         targetWeight: 78,
         lastPrice: null,
         lastUpdated: null,
+        assetClass: "ETF", 
       },
       {
         id: "coremsciemimi",
@@ -115,6 +116,7 @@ export default function PortfolioDashboard() {
         targetWeight: 5,
         lastPrice: null,
         lastUpdated: null,
+        assetClass: "ETF", 
       },
       {
         id: "gold",
@@ -126,6 +128,8 @@ export default function PortfolioDashboard() {
         targetWeight: 10,
         lastPrice: null,
         lastUpdated: null,
+        assetClass: "Commodity",
+        
       },
       {
         id: "bitcoin",
@@ -138,6 +142,7 @@ export default function PortfolioDashboard() {
         targetWeight: 4, // obiettivo percentuale
         lastPrice: null,
         lastUpdated: null,
+        assetClass: "Crypto",
       },
     {
         id: "uranium",
@@ -149,6 +154,7 @@ export default function PortfolioDashboard() {
         targetWeight: 2,
         lastPrice: null,
         lastUpdated: null,
+      assetClass: "ETF", 
       },
     {
         id: "quantum",
@@ -160,6 +166,7 @@ export default function PortfolioDashboard() {
         targetWeight: 1,
         lastPrice: null,
         lastUpdated: null,
+      assetClass: "ETF", 
       },
     ];
   });
@@ -636,7 +643,7 @@ const allocationData = [
                 <th className="px-3 text-right">Perf. €</th>
                 <th className="px-3 text-center">Perf. %</th>
                 <th className="px-3 text-center">Peso attuale</th>
-                <th className="px-3 text-right">Ultimo aggiornamento</th>
+                <th className="px-3 text-right">Asset Class</th>
               </tr>
             </thead>
             <tbody>
@@ -694,12 +701,8 @@ const allocationData = [
                     {/* Peso */}
                     <td className="px-3 text-center">{w.toFixed(2)}%</td>
                   
-                    {/* Ultimo aggiornamento */}
-                    <td className="px-3 text-right text-gray-500 text-xs">
-                      {a.lastUpdated
-                        ? new Date(a.lastUpdated).toLocaleString()
-                        : "—"}
-                    </td>
+                    {/* Asset Class */}
+                    <td className="px-3 text-center">{a.assetClass}</td>
                   </tr>
 
                 );

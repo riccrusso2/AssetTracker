@@ -110,7 +110,7 @@ export default function PortfolioDashboard() {
         id: "coremsciemimi",
         name: "Core MSCI EM IMI USD (Acc)",
         identifier: "IE00BKM4GZ66",
-        quantity: 16.321397,
+        quantity: 0,
         currency: "",
         costBasis: 0,
         targetWeight: 3 ,

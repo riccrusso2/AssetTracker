@@ -476,7 +476,7 @@ const allocationData = [
   // (manteniamo il resto del codice: stats, rebalance, grafici ecc.)
 
   // [QUI puoi copiare le sezioni "rebalance", "pieData", "barData", "lineData" e JSX dal tuo file attuale]
-  const MONTHLY_BUDGET = 1600; // € da investire ogni mese
+  const MONTHLY_BUDGET = 1500; // € da investire ogni mese
   const totalCash = 10000; // esempio, la liquidità totale
   
   // --- Rebalancing suggestions ---

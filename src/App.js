@@ -179,8 +179,8 @@ export default function PortfolioDashboard() {
   const [loadingIds, setLoadingIds] = useState({});
   const [error, setError] = useState(null);
   const intervalRef = useRef(null);
-  const [privateEquity, setPrivateEquity] = useState(() => {
-  const fromLS = localStorage.getItem("pf.privateEquity.v1");
+  const [startup, setStartup] = useState(() => {
+  const fromLS = localStorage.getItem("pf.startup.v1");
   return fromLS ? JSON.parse(fromLS) : [
     // esempio iniziale
     { id: cryptoRandomId(), name: "Rhyde 2.0", invested: 248, fee: 19.84 },
@@ -347,11 +347,11 @@ export default function PortfolioDashboard() {
   (acc, a) => acc + (a.lastPrice ? a.lastPrice * (a.quantity || 0) : 0),
   0
 );
-const totalPEValue = privateEquity.reduce((acc, p) => acc + (p.invested || 0), 0);
+const totalPEValue = startup.reduce((acc, p) => acc + (p.invested || 0), 0);
 
 const allocationData = [
   { name: "Azioni", value: totalEquityValue },
-  { name: "Private Equity", value: totalPEValue },
+  { name: "startup", value: totalPEValue },
 ];
 
   // --- Handlers ---
@@ -710,7 +710,7 @@ const allocationData = [
       </section>
 
       <section className="bg-white p-4 rounded-2xl shadow">
-  <h2 className="font-semibold mb-4">Investimenti Private Equity</h2>
+  <h2 className="font-semibold mb-4">Investimenti startup</h2>
   <div className="overflow-x-auto">
     <table className="w-full text-sm border-collapse">
       <thead>
@@ -721,7 +721,7 @@ const allocationData = [
         </tr>
       </thead>
       <tbody>
-        {privateEquity.map((p, i) => (
+        {startup.map((p, i) => (
           <tr
             key={p.id}
             className={`border-b ${i % 2 === 0 ? "bg-white" : "bg-gray-50"} hover:bg-gray-100`}
@@ -833,7 +833,7 @@ const allocationData = [
         </div>
         <div className="bg-white p-4 rounded-2xl shadow">
   <h3 className="font-semibold mb-4 flex items-center gap-2">
-    <PieChartIcon className="w-5 h-5" /> Allocazione portafoglio: Azioni vs Private Equity
+    <PieChartIcon className="w-5 h-5" /> Allocazione portafoglio: Azioni vs startup
   </h3>
 
   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
@@ -870,7 +870,7 @@ const allocationData = [
         {formatCurrency(totalEquityValue)}
       </div>
       <div>
-        <span className="font-semibold">Private Equity: </span>
+        <span className="font-semibold">startup: </span>
         {formatCurrency(totalPEValue)}
       </div>
       <div className="mt-2 font-semibold">
@@ -881,7 +881,7 @@ const allocationData = [
 </div>
         <div className="bg-white p-4 rounded-2xl shadow mt-4">
   <h3 className="font-semibold mb-4 flex items-center gap-2">
-    <PieChartIcon className="w-5 h-5" /> Allocazione portafoglio: Azioni vs Private Equity vs Liquidità
+    <PieChartIcon className="w-5 h-5" /> Allocazione portafoglio: Azioni vs startup vs Liquidità
   </h3>
 
   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
@@ -891,7 +891,7 @@ const allocationData = [
           <Pie
   data={[
     { name: "Azioni", value: totalEquityValue },
-    { name: "Private Equity", value: totalPEValue },
+    { name: "startup", value: totalPEValue },
     { name: "Liquidità", value: totalCash },
   ]}
   dataKey="value"
@@ -925,7 +925,7 @@ const allocationData = [
         {formatCurrency(totalEquityValue)}
       </div>
       <div>
-        <span className="font-semibold">Private Equity: </span>
+        <span className="font-semibold">startup: </span>
         {formatCurrency(totalPEValue)}
       </div>
       <div>

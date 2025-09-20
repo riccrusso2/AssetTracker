@@ -725,7 +725,7 @@ const allocationData = [
                   a.costBasis && a.lastPrice
                     ? ((a.lastPrice - a.costBasis) / a.costBasis) * 100
                     : 0;
-                const w = weights.find((w) => w.id === a.id)?.weight || 0;
+                const weight = weights.find((item) => item.id === a.id)?.weight || 0;
 
                 return (
                   <tr
@@ -767,7 +767,7 @@ const allocationData = [
                     </td>
                   
                     {/* Peso */}
-                    <td className="px-3 text-center">{w.toFixed(2)}%</td>
+                    <td className="px-3 text-center">{weight.toFixed(2)}%</td>
                   
                     {/* Asset Class */}
                     <td className="px-3 text-center">{a.assetClass}</td>

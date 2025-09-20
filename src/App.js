@@ -237,7 +237,7 @@ export default function PortfolioDashboard() {
     const totalReturn =
       totalCost > 0 ? (totalValue - totalCost) / totalCost : 0;
 
-    // Raggruppa gli asset per assetClass
+  // 1. Distribuzione per asset class
 const classDistribution = useMemo(() => {
   const map = {};
 
@@ -254,15 +254,7 @@ const classDistribution = useMemo(() => {
   }));
 }, [assets]);
 
-  const classWithStartupAndCash = useMemo(() => {
-  const base = [...classWithStartup];
-  if (totalCash > 0) {
-    base.push({ name: "Liquidità", value: round2(totalCash) });
-  }
-  return base;
-}, [classWithStartup, totalCash]);
-
-    
+// 2. Asset class + startup
 const classWithStartup = useMemo(() => {
   const base = [...classDistribution];
   if (totalPEValue > 0) {
@@ -270,6 +262,18 @@ const classWithStartup = useMemo(() => {
   }
   return base;
 }, [classDistribution, totalPEValue]);
+
+// 3. Asset class + startup + liquidità
+const classWithStartupAndCash = useMemo(() => {
+  const base = [...classWithStartup];
+  if (totalCash > 0) {
+    base.push({ name: "Liquidità", value: round2(totalCash) });
+  }
+  return base;
+}, [classWithStartup, totalCash]);
+
+
+  
 
     const perfArr = assets
       .filter((a) => a.lastPrice && a.costBasis)

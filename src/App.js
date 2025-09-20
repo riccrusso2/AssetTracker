@@ -237,6 +237,40 @@ export default function PortfolioDashboard() {
     const totalReturn =
       totalCost > 0 ? (totalValue - totalCost) / totalCost : 0;
 
+    // Raggruppa gli asset per assetClass
+const classDistribution = useMemo(() => {
+  const map = {};
+
+  assets.forEach((a) => {
+    const value = a.lastPrice ? a.lastPrice * (a.quantity || 0) : 0;
+    if (value > 0) {
+      map[a.assetClass] = (map[a.assetClass] || 0) + value;
+    }
+  });
+
+  return Object.entries(map).map(([name, value]) => ({
+    name,
+    value: round2(value),
+  }));
+}, [assets]);
+
+  const classWithStartupAndCash = useMemo(() => {
+  const base = [...classWithStartup];
+  if (totalCash > 0) {
+    base.push({ name: "Liquidità", value: round2(totalCash) });
+  }
+  return base;
+}, [classWithStartup, totalCash]);
+
+    
+const classWithStartup = useMemo(() => {
+  const base = [...classDistribution];
+  if (totalPEValue > 0) {
+    base.push({ name: "Startup", value: round2(totalPEValue) });
+  }
+  return base;
+}, [classDistribution, totalPEValue]);
+
     const perfArr = assets
       .filter((a) => a.lastPrice && a.costBasis)
       .map((a) => ({
@@ -836,141 +870,85 @@ const allocationData = [
 
 <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="bg-white p-4 rounded-2xl shadow">
-          <h3 className="font-semibold mb-2 flex items-center gap-2">
-            <PieChartIcon className="w-5 h-5" /> Distribuzione del portafoglio azionario
-          </h3>
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                {/* Tooltip con nome completo e valore */}
-                <Pie
-                  data={pieData}
-                  dataKey="value"
-                  nameKey="name"
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={110}
-                  label={(d) => acronyms[d.name] || d.name} // usa acronimi
-                >
-                  {pieData.map((entry, index) => (
-                    <Cell
-                      key={`cell-${index}`}
-                      fill={COLORS[index % COLORS.length]}
-                    />
-                  ))}
-                </Pie>
-                <ReTooltip formatter={(value, name) => [`${value}%`, name]} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
+  <h3 className="font-semibold mb-2 flex items-center gap-2">
+    <PieChartIcon className="w-5 h-5" /> Distribuzione per Asset Class
+  </h3>
+  <div className="h-72">
+    <ResponsiveContainer width="100%" height="100%">
+      <PieChart>
+        <Pie
+          data={classDistribution}
+          dataKey="value"
+          nameKey="name"
+          cx="50%"
+          cy="50%"
+          outerRadius={110}
+          label={(d) => d.name}
+        >
+          {classDistribution.map((entry, index) => (
+            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+          ))}
+        </Pie>
+        <ReTooltip formatter={(v, name) => [`${round2((v / totals.totalValue) * 100)}%`, name]} />
+      </PieChart>
+    </ResponsiveContainer>
+  </div>
+</div>
+
         <div className="bg-white p-4 rounded-2xl shadow">
-  <h3 className="font-semibold mb-4 flex items-center gap-2">
-    <PieChartIcon className="w-5 h-5" /> Allocazione portafoglio: Azioni vs startup
+  <h3 className="font-semibold mb-2 flex items-center gap-2">
+    <PieChartIcon className="w-5 h-5" /> Distribuzione per Asset Class + Startup
   </h3>
-
-  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
-    <div className="h-72 w-full">
-      <ResponsiveContainer width="100%" height="100%">
-        <PieChart>
-          <Pie
-  data={allocationData}
-  dataKey="value"
-  nameKey="name"
-  cx="50%"
-  cy="50%"
-  outerRadius={110}
-  label={(d) => d.name} // solo il nome
->
-  {allocationData.map((entry, index) => (
-    <Cell key={`cell-${index}`} fill={index === 0 ? "#2563eb" : "#f59e0b"} />
-  ))}
-</Pie>
-<ReTooltip
-  formatter={(value, name) => [
-    `${round2((value / (totalEquityValue + totalPEValue)) * 100)}%`,
-    name,
-  ]}
-/>
-
-        </PieChart>
-      </ResponsiveContainer>
-    </div>
-
-    <div className="flex flex-col justify-center space-y-1 text-sm text-gray-700">
-      <div>
-        <span className="font-semibold">Azioni: </span>
-        {formatCurrency(totalEquityValue)}
-      </div>
-      <div>
-        <span className="font-semibold">startup: </span>
-        {formatCurrency(totalPEValue)}
-      </div>
-      <div className="mt-2 font-semibold">
-        Totale: {formatCurrency(totalEquityValue + totalPEValue)}
-      </div>
-    </div>
+  <div className="h-72">
+    <ResponsiveContainer width="100%" height="100%">
+      <PieChart>
+        <Pie
+          data={classWithStartup}
+          dataKey="value"
+          nameKey="name"
+          cx="50%"
+          cy="50%"
+          outerRadius={110}
+          label={(d) => d.name}
+        >
+          {classWithStartup.map((entry, index) => (
+            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+          ))}
+        </Pie>
+        <ReTooltip formatter={(v, name) => [`${round2((v / (totals.totalValue + totalPEValue)) * 100)}%`, name]} />
+      </PieChart>
+    </ResponsiveContainer>
   </div>
 </div>
-        <div className="bg-white p-4 rounded-2xl shadow mt-4">
-  <h3 className="font-semibold mb-4 flex items-center gap-2">
-    <PieChartIcon className="w-5 h-5" /> Allocazione portafoglio: Azioni vs startup vs Liquidità
+
+    <div className="bg-white p-4 rounded-2xl shadow">
+  <h3 className="font-semibold mb-2 flex items-center gap-2">
+    <PieChartIcon className="w-5 h-5" /> Distribuzione per Asset Class + Startup + Liquidità
   </h3>
-
-  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
-    <div className="h-72 w-full">
-      <ResponsiveContainer width="100%" height="100%">
-        <PieChart>
-          <Pie
-  data={[
-    { name: "Azioni", value: totalEquityValue },
-    { name: "startup", value: totalPEValue },
-    { name: "Liquidità", value: totalCash },
-  ]}
-  dataKey="value"
-  nameKey="name"
-  cx="50%"
-  cy="50%"
-  outerRadius={110}
-  label={(d) => d.name} // solo il nome
->
-  {[totalEquityValue, totalPEValue, totalCash].map((_, index) => (
-    <Cell
-      key={`cell-${index}`}
-      fill={index === 0 ? "#2563eb" : index === 1 ? "#f59e0b" : "#16a34a"}
-    />
-  ))}
-</Pie>
-<ReTooltip
-  formatter={(value, name) => [
-    `${round2((value / (totalEquityValue + totalPEValue + totalCash)) * 100)}%`,
-    name,
-  ]}
-/>
-
-        </PieChart>
-      </ResponsiveContainer>
-    </div>
-
-    <div className="flex flex-col justify-center space-y-1 text-sm text-gray-700">
-      <div>
-        <span className="font-semibold">Azioni: </span>
-        {formatCurrency(totalEquityValue)}
-      </div>
-      <div>
-        <span className="font-semibold">startup: </span>
-        {formatCurrency(totalPEValue)}
-      </div>
-      <div>
-        <span className="font-semibold">Liquidità: </span>
-        {formatCurrency(totalCash)}
-      </div>
-      <div className="mt-2 font-semibold">
-        Totale: {formatCurrency(totalEquityValue + totalPEValue + totalCash)}
-      </div>
-    </div>
+  <div className="h-72">
+    <ResponsiveContainer width="100%" height="100%">
+      <PieChart>
+        <Pie
+          data={classWithStartupAndCash}
+          dataKey="value"
+          nameKey="name"
+          cx="50%"
+          cy="50%"
+          outerRadius={110}
+          label={(d) => d.name}
+        >
+          {classWithStartupAndCash.map((entry, index) => (
+            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+          ))}
+        </Pie>
+        <ReTooltip formatter={(v, name) => [
+          `${round2((v / (totals.totalValue + totalPEValue + totalCash)) * 100)}%`, name
+        ]} />
+      </PieChart>
+    </ResponsiveContainer>
   </div>
 </div>
+
 
           </section>
 

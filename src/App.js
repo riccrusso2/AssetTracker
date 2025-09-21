@@ -237,8 +237,14 @@ const totalPEValue = startup.reduce((acc, p) => acc + (p.invested || 0), 0);
 
  // --- Derived stats ---
 const totals = useMemo(() => {
-  const totalValue = assets.reduce(...);
-  const totalCost = assets.reduce(...);
+  const totalValue = assets.reduce(
+    (acc, a) => acc + (a.lastPrice ? a.lastPrice * (a.quantity || 0) : 0),
+    0
+  );
+  const totalCost = assets.reduce(
+    (acc, a) => acc + (a.costBasis ? a.costBasis * (a.quantity || 0) : 0),
+    0
+  );
   const totalReturn = totalCost > 0 ? (totalValue - totalCost) / totalCost : 0;
 
   const perfArr = assets
@@ -257,6 +263,7 @@ const totals = useMemo(() => {
 
   return { totalValue, totalCost, totalReturn, best, worst };
 }, [assets]);
+
 
 // 1. Distribuzione per asset class
 const classDistribution = useMemo(() => {

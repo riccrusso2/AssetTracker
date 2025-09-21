@@ -81,16 +81,8 @@ function round2(n) {
 // --- Component ---
 export default function PortfolioDashboard() {
 
-    // [QUI puoi copiare le sezioni "rebalance", "pieData", "barData", "lineData" e JSX dal tuo file attuale]
-    const totalEquityValue = assets.reduce(
-  (acc, a) => acc + (a.lastPrice ? a.lastPrice * (a.quantity || 0) : 0),
-  0
-);
-const totalPEValue = startup.reduce((acc, p) => acc + (p.invested || 0), 0);
-  const MONTHLY_BUDGET = 1500; // € da investire ogni mese
-  const totalCash = 10000; // esempio, la liquidità totale
-  
-  const [assets, setAssets] = useState(() => {
+
+   const [assets, setAssets] = useState(() => {
   try {
     const fromLS = localStorage.getItem(LS_ASSETS);
     if (fromLS) {
@@ -232,6 +224,15 @@ const totalPEValue = startup.reduce((acc, p) => acc + (p.invested || 0), 0);
     { id: cryptoRandomId(), name: "Orbital Paradigm", invested: 300, fee: 24 },
   ];
 });
+    // [QUI puoi copiare le sezioni "rebalance", "pieData", "barData", "lineData" e JSX dal tuo file attuale]
+    const totalEquityValue = assets.reduce(
+  (acc, a) => acc + (a.lastPrice ? a.lastPrice * (a.quantity || 0) : 0),
+  0
+);
+const totalPEValue = startup.reduce((acc, p) => acc + (p.invested || 0), 0);
+  const MONTHLY_BUDGET = 1500; // € da investire ogni mese
+  const totalCash = 10000; // esempio, la liquidità totale
+  
 
 
   // --- Derived stats ---

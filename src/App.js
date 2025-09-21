@@ -237,14 +237,18 @@ const totalPEValue = startup.reduce((acc, p) => acc + (p.invested || 0), 0);
 
  // --- Derived stats ---
 const totals = useMemo(() => {
-  const totalValue = assets.reduce(
-    (acc, a) => acc + (a.lastPrice ? a.lastPrice * (a.quantity || 0) : 0),
-    0
-  );
-  const totalCost = assets.reduce(
-    (acc, a) => acc + (a.costBasis ? a.costBasis * (a.quantity || 0) : 0),
-    0
-  );
+  let totalValue = 0;
+  let totalCost = 0;
+
+  assets.forEach((a) => {
+    if (a.lastPrice && a.quantity) {
+      totalValue += a.lastPrice * a.quantity;
+    }
+    if (a.costBasis && a.quantity) {
+      totalCost += a.costBasis * a.quantity;
+    }
+  });
+
   const totalReturn = totalCost > 0 ? (totalValue - totalCost) / totalCost : 0;
 
   const perfArr = assets
@@ -255,7 +259,8 @@ const totals = useMemo(() => {
       perf: (a.lastPrice - a.costBasis) / a.costBasis,
     }));
 
-  let best = null, worst = null;
+  let best = null;
+  let worst = null;
   if (perfArr.length) {
     best = perfArr.reduce((p, c) => (c.perf > p.perf ? c : p));
     worst = perfArr.reduce((p, c) => (c.perf < p.perf ? c : p));

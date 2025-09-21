@@ -303,36 +303,16 @@ const classWithStartupAndCash = useMemo(() => {
   return base;
 }, [classWithStartup, totalCash]);
 
+const returns = history.map((h, i) =>
+  i === 0 ? 0 : (h.v - history[i - 1].v) / history[i - 1].v
+);
 
+const contributions = assets.map((a) => {
+  const contrib =
+    a.lastPrice && a.costBasis ? (a.lastPrice - a.costBasis) * a.quantity : 0;
+  return { name: a.name, value: contrib };
+});
 
-  
-
-    const perfArr = assets
-      .filter((a) => a.lastPrice && a.costBasis)
-      .map((a) => ({
-        id: a.id,
-        name: a.name,
-        perf: (a.lastPrice - a.costBasis) / a.costBasis,
-      }));
-    let best = null,
-      worst = null;
-    if (perfArr.length) {
-      best = perfArr.reduce((p, c) => (c.perf > p.perf ? c : p));
-      worst = perfArr.reduce((p, c) => (c.perf < p.perf ? c : p));
-    }
-
-    return { totalValue, totalCost, totalReturn, best, worst };
-  }, [assets]);
-
-  const returns = history.map((h, i) =>
-    i === 0 ? 0 : (h.v - history[i - 1].v) / history[i - 1].v
-  );
-
-  const contributions = assets.map((a) => {
-    const contrib =
-      a.lastPrice && a.costBasis ? (a.lastPrice - a.costBasis) * a.quantity : 0;
-    return { name: a.name, value: contrib };
-  });
 
   const weights = useMemo(() => {
     const tv = totals.totalValue || 0;

@@ -235,30 +235,38 @@ const totalPEValue = startup.reduce((acc, p) => acc + (p.invested || 0), 0);
   
 
 
-  // --- Derived stats ---
-  const totals = useMemo(() => {
-    const totalValue = assets.reduce(
-      (acc, a) => acc + (a.lastPrice ? a.lastPrice * (a.quantity || 0) : 0),
-      0
-    );
-    const totalCost = assets.reduce(
-      (acc, a) => acc + (a.costBasis ? a.costBasis * (a.quantity || 0) : 0),
-      0
-    );
-    const totalReturn =
-      totalCost > 0 ? (totalValue - totalCost) / totalCost : 0;
+ // --- Derived stats ---
+const totals = useMemo(() => {
+  const totalValue = assets.reduce(...);
+  const totalCost = assets.reduce(...);
+  const totalReturn = totalCost > 0 ? (totalValue - totalCost) / totalCost : 0;
 
-  // 1. Distribuzione per asset class
+  const perfArr = assets
+    .filter((a) => a.lastPrice && a.costBasis)
+    .map((a) => ({
+      id: a.id,
+      name: a.name,
+      perf: (a.lastPrice - a.costBasis) / a.costBasis,
+    }));
+
+  let best = null, worst = null;
+  if (perfArr.length) {
+    best = perfArr.reduce((p, c) => (c.perf > p.perf ? c : p));
+    worst = perfArr.reduce((p, c) => (c.perf < p.perf ? c : p));
+  }
+
+  return { totalValue, totalCost, totalReturn, best, worst };
+}, [assets]);
+
+// 1. Distribuzione per asset class
 const classDistribution = useMemo(() => {
   const map = {};
-
   assets.forEach((a) => {
     const value = a.lastPrice ? a.lastPrice * (a.quantity || 0) : 0;
     if (value > 0) {
       map[a.assetClass] = (map[a.assetClass] || 0) + value;
     }
   });
-
   return Object.entries(map).map(([name, value]) => ({
     name,
     value: round2(value),
@@ -282,6 +290,7 @@ const classWithStartupAndCash = useMemo(() => {
   }
   return base;
 }, [classWithStartup, totalCash]);
+
 
 
   

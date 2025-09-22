@@ -230,7 +230,7 @@ export default function PortfolioDashboard() {
   0
 );
 const totalPEValue = startup.reduce((acc, p) => acc + (p.invested || 0), 0);
-  const MONTHLY_BUDGET = 1500; // € da investire ogni mese
+  const MONTHLY_BUDGET = 2500; // € da investire ogni mese
   const totalCash = 10000; // esempio, la liquidità totale
   
 

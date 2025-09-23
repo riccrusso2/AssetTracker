@@ -74,27 +74,6 @@ function formatCurrency(n, currency = "EUR") {
   }
 }
 
-// Funzione di simulazione
-function simulateGrowth(initialValue: number, monthlyBudget: number, annualRate: number, years: number) {
-  const monthlyRate = Math.pow(1 + annualRate, 1 / 12) - 1;
-  let value = initialValue;
-  const data = [];
-
-  for (let month = 0; month <= years * 12; month++) {
-    if (month > 0) {
-      value = (value + monthlyBudget) * (1 + monthlyRate);
-    }
-    data.push({
-      month,
-      year: Math.floor(month / 12),
-      value,
-    });
-  }
-
-  return data;
-}
-
-
 function round2(n) {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
@@ -1026,26 +1005,6 @@ const allocationData = [
           slippage.
         </p>
       </section>
-
-<section className="bg-white p-4 rounded-2xl shadow">
-  <h2 className="font-semibold mb-4">Simulazioni di crescita</h2>
-  <ResponsiveContainer width="100%" height={300}>
-    <LineChart
-      data={simulateGrowth(
-        totals.totalValue + totalPEValue + totalCash, 
-        MONTHLY_BUDGET, 
-        0.05, // 5% annuo (modificabile)
-        10     // 10 anni
-      )}
-    >
-      <CartesianGrid strokeDasharray="3 3" />
-      <XAxis dataKey="month" tickFormatter={(m) => `${Math.floor(m/12)}y`} />
-      <YAxis tickFormatter={(v) => formatCurrency(v)} />
-      <Tooltip formatter={(v) => formatCurrency(v as number)} />
-      <Line type="monotone" dataKey="value" stroke="#10b981" strokeWidth={2} dot={false} />
-    </LineChart>
-  </ResponsiveContainer>
-</section>
- </div>
+    </div>
   );
 }

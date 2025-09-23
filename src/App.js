@@ -1026,7 +1026,6 @@ const allocationData = [
           slippage.
         </p>
       </section>
-    </div>
 
 <section className="bg-white p-4 rounded-2xl shadow">
   <h2 className="font-semibold mb-4">Simulazioni di crescita</h2>
@@ -1047,6 +1046,6 @@ const allocationData = [
     </LineChart>
   </ResponsiveContainer>
 </section>
-
+ </div>
   );
 }

@@ -85,31 +85,36 @@ function ScenarioSimulator({ totals, totalCash, monthlyBudget: initialMonthly })
   const [years, setYears] = React.useState(10);
   const [monthlyBudget, setMonthlyBudget] = React.useState(initialMonthly);
 
-  const initialCapital = totals.totalValue + totalCash;
-
   const projections = React.useMemo(() => {
     const data = [];
-    let withInterest = initialCapital;
-    let withoutInterest = initialCapital;
+
+    // separo investito e liquidità
+    let invested = totals.totalValue;
+    let cash = totalCash;
+
+    let withInterestInvested = invested;
+    let withoutInterestInvested = invested;
 
     const rMonthly = (annualRate / 100) / 12;
 
     for (let y = 1; y <= years; y++) {
       for (let m = 1; m <= 12; m++) {
-        // con interessi + versamenti
-        withInterest = withInterest * (1 + rMonthly) + monthlyBudget;
+        // con interessi: solo la parte investita cresce
+        withInterestInvested = withInterestInvested * (1 + rMonthly) + monthlyBudget;
 
-        // solo capitale + versamenti (senza interessi)
-        withoutInterest += monthlyBudget;
+        // senza interessi: solo capitale + versamenti
+        withoutInterestInvested += monthlyBudget;
       }
+
       data.push({
         year: y,
-        withInterest,
-        withoutInterest,
+        withInterest: withInterestInvested + cash,       // investito + cash
+        withoutInterest: withoutInterestInvested + cash // investito + cash
       });
     }
+
     return data;
-  }, [annualRate, years, initialCapital, monthlyBudget]);
+  }, [annualRate, years, totals.totalValue, totalCash, monthlyBudget]);
 
   return (
     <div className="p-4 border rounded-2xl shadow-sm bg-white mt-6">
@@ -151,10 +156,7 @@ function ScenarioSimulator({ totals, totalCash, monthlyBudget: initialMonthly })
         <LineChart data={projections} margin={{ left: 40, right: 20 }}>
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey="year" />
-          <YAxis
-            width={100}
-            tickFormatter={(v) => formatCurrency(v)}
-          />
+          <YAxis width={100} tickFormatter={(v) => formatCurrency(v)} />
           <ReTooltip formatter={(v) => formatCurrency(v)} />
           <Line
             type="monotone"
@@ -171,10 +173,11 @@ function ScenarioSimulator({ totals, totalCash, monthlyBudget: initialMonthly })
             name="Solo versamenti"
           />
         </LineChart>
-      </ResponsiveContainer>      
+      </ResponsiveContainer>
     </div>
   );
 }
+
 
 
 

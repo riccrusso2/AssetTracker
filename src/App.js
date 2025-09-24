@@ -80,22 +80,38 @@ function round2(n) {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
-function ScenarioSimulator({ totals, monthlyBudget, totalCash }) {
+function ScenarioSimulator({ totals, totalCash, monthlyBudget: initialMonthly }) {
   const [annualRate, setAnnualRate] = React.useState(5); // %
   const [years, setYears] = React.useState(10);
+  const [monthlyBudget, setMonthlyBudget] = React.useState(initialMonthly);
 
   const initialCapital = totals.totalValue + totalCash;
 
   const projections = React.useMemo(() => {
     const data = [];
-    let value = initialCapital;
+    let combined = initialCapital;
+    let onlyCapital = initialCapital;
+    let onlyDeposits = 0;
+
     const rMonthly = (annualRate / 100) / 12;
 
     for (let y = 1; y <= years; y++) {
       for (let m = 1; m <= 12; m++) {
-        value = value * (1 + rMonthly) + monthlyBudget;
+        // con interessi + versamenti
+        combined = combined * (1 + rMonthly) + monthlyBudget;
+
+        // solo capitale iniziale (composto)
+        onlyCapital = onlyCapital * (1 + rMonthly);
+
+        // solo versamenti (senza interessi)
+        onlyDeposits += monthlyBudget;
       }
-      data.push({ year: y, value });
+      data.push({
+        year: y,
+        combined,
+        onlyCapital,
+        onlyDeposits,
+      });
     }
     return data;
   }, [annualRate, years, initialCapital, monthlyBudget]);
@@ -122,28 +138,49 @@ function ScenarioSimulator({ totals, monthlyBudget, totalCash }) {
             className="border p-1 rounded w-20"
           />
         </label>
+        <label>
+          Budget mensile (€):{" "}
+          <input
+            type="number"
+            value={monthlyBudget}
+            onChange={(e) => setMonthlyBudget(parseFloat(e.target.value))}
+            className="border p-1 rounded w-24"
+          />
+        </label>
       </div>
 
-      <ResponsiveContainer width="100%" height={300}>
-        <LineChart data={projections}>
+      <ResponsiveContainer width="100%" height={350}>
+        <LineChart data={projections} margin={{ left: 40, right: 20 }}>
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey="year" />
-          <YAxis tickFormatter={(v) => formatCurrency(v)} />
+          <YAxis
+            width={100}
+            tickFormatter={(v) => formatCurrency(v)}
+          />
           <ReTooltip formatter={(v) => formatCurrency(v)} />
-          <Line type="monotone" dataKey="value" stroke="#8884d8" strokeWidth={2} />
+          <Line type="monotone" dataKey="combined" stroke="#8b5cf6" strokeWidth={2} name="Capitale + interessi" />
+          <Line type="monotone" dataKey="onlyCapital" stroke="#3b82f6" strokeWidth={2} name="Solo capitale iniziale" />
+          <Line type="monotone" dataKey="onlyDeposits" stroke="#10b981" strokeWidth={2} name="Solo versamenti" />
         </LineChart>
       </ResponsiveContainer>
 
       <ul className="mt-4 space-y-1 text-sm">
         {projections.map((p) => (
           <li key={p.year}>
-            Anno {p.year}: <strong>{formatCurrency(p.value)}</strong>
+            Anno {p.year}:{" "}
+            <span className="text-violet-600 font-bold">
+              {formatCurrency(p.combined)}
+            </span>{" "}
+            (Capitale+Interessi) |{" "}
+            <span className="text-blue-600">{formatCurrency(p.onlyCapital)}</span> (Solo capitale) |{" "}
+            <span className="text-green-600">{formatCurrency(p.onlyDeposits)}</span> (Solo versamenti)
           </li>
         ))}
       </ul>
     </div>
   );
 }
+
 
 
 

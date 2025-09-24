@@ -301,6 +301,9 @@ export default function PortfolioDashboard() {
     ];
   });
 
+  const MONTHLY_BUDGET = 2500; // € da investire ogni mese
+  const totalCash = 10000; // esempio, la liquidità totale
+
   const [history, setHistory] = useState(() => {
     const fromLS = localStorage.getItem(LS_HISTORY);
     return fromLS ? JSON.parse(fromLS) : [];
@@ -332,8 +335,6 @@ export default function PortfolioDashboard() {
   0
 );
 const totalPEValue = startup.reduce((acc, p) => acc + (p.invested || 0), 0);
-  const MONTHLY_BUDGET = 2500; // € da investire ogni mese
-  const totalCash = 10000; // esempio, la liquidità totale
   
 
 

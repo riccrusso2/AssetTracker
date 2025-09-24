@@ -35,7 +35,6 @@ import {
   Trash2,
 } from "lucide-react";
 import "./styles.css";
-import { Card } from "@/components/ui/card";
 
 
 // --- Utility helpers ---
@@ -86,7 +85,13 @@ function ScenarioSimulator({ totals, monthlyBudget, totalCash }) {
 
   const initialCapital = totals.totalValue + totalCash;
 
-  const projections = useMemo(() => {
+  function ScenarioSimulator({ totals, monthlyBudget, totalCash }) {
+  const [annualRate, setAnnualRate] = React.useState(5); // %
+  const [years, setYears] = React.useState(10);
+
+  const initialCapital = totals.totalValue + totalCash;
+
+  const projections = React.useMemo(() => {
     const data = [];
     let value = initialCapital;
     const rMonthly = (annualRate / 100) / 12;
@@ -105,7 +110,7 @@ function ScenarioSimulator({ totals, monthlyBudget, totalCash }) {
   }, [annualRate, years, initialCapital, monthlyBudget]);
 
   return (
-    <Card className="p-4">
+    <div className="p-4 border rounded-2xl shadow-sm bg-white mt-6">
       <h2 className="text-lg font-bold mb-2">Simulazione scenari</h2>
       <div className="flex gap-4 mb-4">
         <label>
@@ -145,9 +150,10 @@ function ScenarioSimulator({ totals, monthlyBudget, totalCash }) {
           </li>
         ))}
       </ul>
-    </Card>
+    </div>
   );
 }
+
 
 
 // --- Component ---

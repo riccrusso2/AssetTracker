@@ -36,7 +36,6 @@ import {
   Trash2,
 } from "lucide-react";
 import "./styles.css";
-import { Card } from "@/components/ui/card";
 
 
 // --- Utility helpers ---

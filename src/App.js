@@ -78,6 +78,76 @@ function round2(n) {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
+function ScenarioSimulator({ totals, monthlyBudget, totalCash }) {
+  const [annualRate, setAnnualRate] = useState(5); // %
+  const [years, setYears] = useState(10);
+
+  const initialCapital = totals.totalValue + totalCash;
+
+  const projections = useMemo(() => {
+    const data = [];
+    let value = initialCapital;
+    const rMonthly = (annualRate / 100) / 12;
+
+    for (let y = 1; y <= years; y++) {
+      for (let m = 1; m <= 12; m++) {
+        // capitalizzazione mensile + versamento
+        value = value * (1 + rMonthly) + monthlyBudget;
+      }
+      data.push({
+        year: y,
+        value: value
+      });
+    }
+    return data;
+  }, [annualRate, years, initialCapital, monthlyBudget]);
+
+  return (
+    <Card className="p-4">
+      <h2 className="text-lg font-bold mb-2">Simulazione scenari</h2>
+      <div className="flex gap-4 mb-4">
+        <label>
+          Tasso annuo (%):{" "}
+          <input
+            type="number"
+            value={annualRate}
+            onChange={(e) => setAnnualRate(parseFloat(e.target.value))}
+            className="border p-1 rounded w-20"
+          />
+        </label>
+        <label>
+          Orizzonte (anni):{" "}
+          <input
+            type="number"
+            value={years}
+            onChange={(e) => setYears(parseInt(e.target.value))}
+            className="border p-1 rounded w-20"
+          />
+        </label>
+      </div>
+
+      <ResponsiveContainer width="100%" height={300}>
+        <LineChart data={projections}>
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis dataKey="year" />
+          <YAxis tickFormatter={(v) => formatCurrency(v)} />
+          <ReTooltip formatter={(v) => formatCurrency(v)} />
+          <Line type="monotone" dataKey="value" stroke="#8884d8" strokeWidth={2} />
+        </LineChart>
+      </ResponsiveContainer>
+
+      <ul className="mt-4 space-y-1 text-sm">
+        {projections.map((p) => (
+          <li key={p.year}>
+            Anno {p.year}: <strong>{formatCurrency(p.value)}</strong>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
+}
+
+
 // --- Component ---
 export default function PortfolioDashboard() {
 
@@ -957,6 +1027,13 @@ const allocationData = [
 
 
           </section>
+
+<ScenarioSimulator
+  totals={totals}
+  monthlyBudget={MONTHLY_BUDGET}
+  totalCash={totalCash}
+/>
+
 
 
       {/* Suggerimenti per ribilanciamento */}

@@ -1,3 +1,4 @@
+
 // app.js
 import React, {
   useCallback,
@@ -35,6 +36,7 @@ import {
   Trash2,
 } from "lucide-react";
 import "./styles.css";
+import { Card } from "@/components/ui/card";
 
 
 // --- Utility helpers ---
@@ -80,12 +82,6 @@ function round2(n) {
 }
 
 function ScenarioSimulator({ totals, monthlyBudget, totalCash }) {
-  const [annualRate, setAnnualRate] = useState(5); // %
-  const [years, setYears] = useState(10);
-
-  const initialCapital = totals.totalValue + totalCash;
-
-  function ScenarioSimulator({ totals, monthlyBudget, totalCash }) {
   const [annualRate, setAnnualRate] = React.useState(5); // %
   const [years, setYears] = React.useState(10);
 
@@ -98,13 +94,9 @@ function ScenarioSimulator({ totals, monthlyBudget, totalCash }) {
 
     for (let y = 1; y <= years; y++) {
       for (let m = 1; m <= 12; m++) {
-        // capitalizzazione mensile + versamento
         value = value * (1 + rMonthly) + monthlyBudget;
       }
-      data.push({
-        year: y,
-        value: value
-      });
+      data.push({ year: y, value });
     }
     return data;
   }, [annualRate, years, initialCapital, monthlyBudget]);

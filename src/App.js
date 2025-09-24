@@ -89,28 +89,23 @@ function ScenarioSimulator({ totals, totalCash, monthlyBudget: initialMonthly })
 
   const projections = React.useMemo(() => {
     const data = [];
-    let combined = initialCapital;
-    let onlyCapital = initialCapital;
-    let onlyDeposits = 0;
+    let withInterest = initialCapital;
+    let withoutInterest = initialCapital;
 
     const rMonthly = (annualRate / 100) / 12;
 
     for (let y = 1; y <= years; y++) {
       for (let m = 1; m <= 12; m++) {
         // con interessi + versamenti
-        combined = combined * (1 + rMonthly) + monthlyBudget;
+        withInterest = withInterest * (1 + rMonthly) + monthlyBudget;
 
-        // solo capitale iniziale (composto)
-        onlyCapital = onlyCapital * (1 + rMonthly);
-
-        // solo versamenti (senza interessi)
-        onlyDeposits += monthlyBudget;
+        // solo capitale + versamenti (senza interessi)
+        withoutInterest += monthlyBudget;
       }
       data.push({
         year: y,
-        combined,
-        onlyCapital,
-        onlyDeposits,
+        withInterest,
+        withoutInterest,
       });
     }
     return data;
@@ -119,7 +114,9 @@ function ScenarioSimulator({ totals, totalCash, monthlyBudget: initialMonthly })
   return (
     <div className="p-4 border rounded-2xl shadow-sm bg-white mt-6">
       <h2 className="text-lg font-bold mb-2">Simulazione scenari</h2>
-      <div className="flex gap-4 mb-4">
+
+      {/* Controlli input */}
+      <div className="flex flex-wrap gap-4 mb-4">
         <label>
           Tasso annuo (%):{" "}
           <input
@@ -149,6 +146,7 @@ function ScenarioSimulator({ totals, totalCash, monthlyBudget: initialMonthly })
         </label>
       </div>
 
+      {/* Grafico */}
       <ResponsiveContainer width="100%" height={350}>
         <LineChart data={projections} margin={{ left: 40, right: 20 }}>
           <CartesianGrid strokeDasharray="3 3" />
@@ -158,28 +156,52 @@ function ScenarioSimulator({ totals, totalCash, monthlyBudget: initialMonthly })
             tickFormatter={(v) => formatCurrency(v)}
           />
           <ReTooltip formatter={(v) => formatCurrency(v)} />
-          <Line type="monotone" dataKey="combined" stroke="#8b5cf6" strokeWidth={2} name="Capitale + interessi" />
-          <Line type="monotone" dataKey="onlyCapital" stroke="#3b82f6" strokeWidth={2} name="Solo capitale iniziale" />
-          <Line type="monotone" dataKey="onlyDeposits" stroke="#10b981" strokeWidth={2} name="Solo versamenti" />
+          <Line
+            type="monotone"
+            dataKey="withInterest"
+            stroke="#8b5cf6"
+            strokeWidth={2}
+            name="Capitale + interessi"
+          />
+          <Line
+            type="monotone"
+            dataKey="withoutInterest"
+            stroke="#10b981"
+            strokeWidth={2}
+            name="Solo versamenti"
+          />
         </LineChart>
       </ResponsiveContainer>
 
-      <ul className="mt-4 space-y-1 text-sm">
-        {projections.map((p) => (
-          <li key={p.year}>
-            Anno {p.year}:{" "}
-            <span className="text-violet-600 font-bold">
-              {formatCurrency(p.combined)}
-            </span>{" "}
-            (Capitale+Interessi) |{" "}
-            <span className="text-blue-600">{formatCurrency(p.onlyCapital)}</span> (Solo capitale) |{" "}
-            <span className="text-green-600">{formatCurrency(p.onlyDeposits)}</span> (Solo versamenti)
-          </li>
-        ))}
-      </ul>
+      {/* Tabella proiezioni */}
+      <div className="mt-6 overflow-x-auto">
+        <table className="w-full text-sm border border-gray-200 rounded-lg">
+          <thead className="bg-gray-100">
+            <tr>
+              <th className="px-4 py-2 text-left">Anno</th>
+              <th className="px-4 py-2 text-left text-violet-600">Capitale + interessi</th>
+              <th className="px-4 py-2 text-left text-green-600">Solo versamenti</th>
+            </tr>
+          </thead>
+          <tbody>
+            {projections.map((p) => (
+              <tr key={p.year} className="border-t">
+                <td className="px-4 py-2">{p.year}</td>
+                <td className="px-4 py-2 text-violet-600 font-medium">
+                  {formatCurrency(p.withInterest)}
+                </td>
+                <td className="px-4 py-2 text-green-600">
+                  {formatCurrency(p.withoutInterest)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
+
 
 
 

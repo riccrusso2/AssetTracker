@@ -81,7 +81,7 @@ function round2(n) {
 }
 
 function ScenarioSimulator({ totals, totalCash, monthlyBudget: initialMonthly }) {
-  const [annualRate, setAnnualRate] = React.useState(5); // %
+  const [annualRate, setAnnualRate] = React.useState(10); // %
   const [years, setYears] = React.useState(10);
   const [monthlyBudget, setMonthlyBudget] = React.useState(initialMonthly);
 
@@ -97,7 +97,7 @@ function ScenarioSimulator({ totals, totalCash, monthlyBudget: initialMonthly })
     for (let y = 1; y <= years; y++) {
       for (let m = 1; m <= 12; m++) {
         // con interessi + versamenti
-        withInterest = withInterest * (1 + rMonthly) + monthlyBudget;
+        withInterest = withInterest * (1 + rMonthly) + ;
 
         // solo capitale + versamenti (senza interessi)
         withoutInterest += monthlyBudget;

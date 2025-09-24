@@ -171,33 +171,7 @@ function ScenarioSimulator({ totals, totalCash, monthlyBudget: initialMonthly })
             name="Solo versamenti"
           />
         </LineChart>
-      </ResponsiveContainer>
-
-      {/* Tabella proiezioni */}
-      <div className="mt-6 overflow-x-auto">
-        <table className="w-full text-sm border border-gray-200 rounded-lg">
-          <thead className="bg-gray-100">
-            <tr>
-              <th className="px-4 py-2 text-left">Anno</th>
-              <th className="px-4 py-2 text-left text-violet-600">Capitale + interessi</th>
-              <th className="px-4 py-2 text-left text-green-600">Solo versamenti</th>
-            </tr>
-          </thead>
-          <tbody>
-            {projections.map((p) => (
-              <tr key={p.year} className="border-t">
-                <td className="px-4 py-2">{p.year}</td>
-                <td className="px-4 py-2 text-violet-600 font-medium">
-                  {formatCurrency(p.withInterest)}
-                </td>
-                <td className="px-4 py-2 text-green-600">
-                  {formatCurrency(p.withoutInterest)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      </ResponsiveContainer>      
     </div>
   );
 }

@@ -301,7 +301,7 @@ export default function PortfolioDashboard() {
     ];
   });
 
-  const MONTHLY_BUDGET = 2500; // € da investire ogni mese
+  const MONTHLY_BUDGET = 2000; // € da investire ogni mese
   const totalCash = 10000; // esempio, la liquidità totale
 
   const [history, setHistory] = useState(() => {
@@ -327,6 +327,7 @@ export default function PortfolioDashboard() {
     { id: cryptoRandomId(), name: "Hymalaia", invested: 300, fee: 24 },
     { id: cryptoRandomId(), name: "Favikon", invested: 300, fee: 24 },
     { id: cryptoRandomId(), name: "Orbital Paradigm", invested: 300, fee: 24 },
+    { id: cryptoRandomId(), name: "Yasu", invested: 300, fee: 24 },
   ];
 });
     // [QUI puoi copiare le sezioni "rebalance", "pieData", "barData", "lineData" e JSX dal tuo file attuale]

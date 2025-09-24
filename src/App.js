@@ -97,7 +97,7 @@ function ScenarioSimulator({ totals, totalCash, monthlyBudget: initialMonthly })
     for (let y = 1; y <= years; y++) {
       for (let m = 1; m <= 12; m++) {
         // con interessi + versamenti
-        withInterest = withInterest * (1 + rMonthly) + ;
+        withInterest = withInterest * (1 + rMonthly) + monthlyBudget;
 
         // solo capitale + versamenti (senza interessi)
         withoutInterest += monthlyBudget;

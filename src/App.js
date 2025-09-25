@@ -80,106 +80,6 @@ function round2(n) {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
-function ScenarioSimulator({ totals, totalCash, monthlyBudget: initialMonthly }) {
-  const [annualRate, setAnnualRate] = React.useState(10); // %
-  const [years, setYears] = React.useState(10);
-  const [monthlyBudget, setMonthlyBudget] = React.useState(initialMonthly);
-
-  const projections = React.useMemo(() => {
-    const data = [];
-
-    // separo investito e liquidità
-    let invested = totals.totalValue;
-    let cash = totalCash;
-
-    let withInterestInvested = invested;
-    let withoutInterestInvested = invested;
-
-    const rMonthly = (annualRate / 100) / 12;
-
-    for (let y = 1; y <= years; y++) {
-      for (let m = 1; m <= 12; m++) {
-        // con interessi: solo la parte investita cresce
-        withInterestInvested = withInterestInvested * (1 + rMonthly) + monthlyBudget;
-
-        // senza interessi: solo capitale + versamenti
-        withoutInterestInvested += monthlyBudget;
-      }
-
-      data.push({
-        year: y,
-        withInterest: withInterestInvested + cash,       // investito + cash
-        withoutInterest: withoutInterestInvested + cash // investito + cash
-      });
-    }
-
-    return data;
-  }, [annualRate, years, totals.totalValue, totalCash, monthlyBudget]);
-
-  return (
-    <div className="p-4 border rounded-2xl shadow-sm bg-white mt-6">
-      <h2 className="text-lg font-bold mb-2">Simulazione scenari</h2>
-
-      {/* Controlli input */}
-      <div className="flex flex-wrap gap-4 mb-4">
-        <label>
-          Tasso annuo (%):{" "}
-          <input
-            type="number"
-            value={annualRate}
-            onChange={(e) => setAnnualRate(parseFloat(e.target.value))}
-            className="border p-1 rounded w-20"
-          />
-        </label>
-        <label>
-          Orizzonte (anni):{" "}
-          <input
-            type="number"
-            value={years}
-            onChange={(e) => setYears(parseInt(e.target.value))}
-            className="border p-1 rounded w-20"
-          />
-        </label>
-        <label>
-          Budget mensile (€):{" "}
-          <input
-            type="number"
-            value={monthlyBudget}
-            onChange={(e) => setMonthlyBudget(parseFloat(e.target.value))}
-            className="border p-1 rounded w-24"
-          />
-        </label>
-      </div>
-
-      {/* Grafico */}
-      <ResponsiveContainer width="100%" height={350}>
-        <LineChart data={projections} margin={{ left: 40, right: 20 }}>
-          <CartesianGrid strokeDasharray="3 3" />
-          <XAxis dataKey="year" />
-          <YAxis width={100} tickFormatter={(v) => formatCurrency(v)} />
-          <ReTooltip formatter={(v) => formatCurrency(v)} />
-          <Line
-            type="monotone"
-            dataKey="withInterest"
-            stroke="#8b5cf6"
-            strokeWidth={2}
-            name="Capitale + interessi"
-          />
-          <Line
-            type="monotone"
-            dataKey="withoutInterest"
-            stroke="#10b981"
-            strokeWidth={2}
-            name="Solo versamenti"
-          />
-        </LineChart>
-      </ResponsiveContainer>
-    </div>
-  );
-}
-
-
-
 
 
 
@@ -1064,13 +964,6 @@ const allocationData = [
 
 
           </section>
-
-<ScenarioSimulator
-  totals={totals}
-  monthlyBudget={MONTHLY_BUDGET}
-  totalCash={totalCash}
-/>
-
 
 
       {/* Suggerimenti per ribilanciamento */}

@@ -902,7 +902,13 @@ const allocationData = [
             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
           ))}
         </Pie>
-        <ReTooltip formatter={(v, name) => [`${round2((v / totals.totalValue) * 100)}%`, name]} />
+        <ReTooltip
+  formatter={(v, name) => [
+    `${formatCurrency(v)} (${round2((v / totals.totalValue) * 100)}%)`,
+    name,
+  ]}
+/>
+
       </PieChart>
     </ResponsiveContainer>
   </div>
@@ -928,7 +934,13 @@ const allocationData = [
             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
           ))}
         </Pie>
-        <ReTooltip formatter={(v, name) => [`${round2((v / (totals.totalValue + totalPEValue)) * 100)}%`, name]} />
+        <ReTooltip
+  formatter={(v, name) => [
+    `${formatCurrency(v)} (${round2((v / (totals.totalValue + totalPEValue)) * 100)}%)`,
+    name,
+  ]}
+/>
+
       </PieChart>
     </ResponsiveContainer>
   </div>
@@ -954,9 +966,13 @@ const allocationData = [
             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
           ))}
         </Pie>
-        <ReTooltip formatter={(v, name) => [
-          `${round2((v / (totals.totalValue + totalPEValue + totalCash)) * 100)}%`, name
-        ]} />
+        <ReTooltip
+  formatter={(v, name) => [
+    `${formatCurrency(v)} (${round2((v / (totals.totalValue + totalPEValue + totalCash)) * 100)}%)`,
+    name,
+  ]}
+/>
+
       </PieChart>
     </ResponsiveContainer>
   </div>

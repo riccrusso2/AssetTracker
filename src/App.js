@@ -204,7 +204,7 @@ export default function PortfolioDashboard() {
     ];
   });
 
-  const MONTHLY_BUDGET = 2500; // € da investire ogni mese
+  const MONTHLY_BUDGET = 5500; // € da investire ogni mese
   const totalCash = 10000; // esempio, la liquidità totale
 
   const [history, setHistory] = useState(() => {

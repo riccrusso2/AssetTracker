@@ -120,7 +120,7 @@ export default function PortfolioDashboard() {
         quantity: 8.108108,
         currency: "",
         costBasis: 37.12,
-        targetWeight: 4 ,
+        targetWeight: 5 ,
         lastPrice: null,
         lastUpdated: null,
         assetClass: "ETF", 
@@ -150,18 +150,6 @@ export default function PortfolioDashboard() {
         lastPrice: null,
         lastUpdated: null,
         assetClass: "Crypto",
-      },
-    {
-        id: "uranium",
-        name: "Uranium And Nuclear Technologies USD (Acc)",
-        identifier: "IE000M7V94E1",
-        quantity: 5.104352,
-        currency: "",
-        costBasis: 29.68 ,
-        targetWeight: 1,
-        lastPrice: null,
-        lastUpdated: null,
-      assetClass: "ETF", 
       },
     {
         id: "quantum",
@@ -204,7 +192,7 @@ export default function PortfolioDashboard() {
     ];
   });
 
-  const MONTHLY_BUDGET = 8750; // € da investire ogni mese
+  const MONTHLY_BUDGET = 5750; // € da investire ogni mese
   const totalCash = 10000; // esempio, la liquidità totale
 
   const [history, setHistory] = useState(() => {
@@ -665,7 +653,6 @@ const allocationData = [
     "FTSE All-World USD (Acc)": "FTSE AW",
     "Core MSCI EM IMI USD (Acc)": "MSCI EM",
     "Physical Gold USD (Acc)": "GOLD",
-    "Uranium And Nuclear Technologies USD (Acc)": "URANIUM",
     Bitcoin: "BTC",
     "VanEck Quantum Computing UCITS ETF A" : "QUANTUM"
     

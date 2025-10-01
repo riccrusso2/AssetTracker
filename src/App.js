@@ -958,6 +958,9 @@ const allocationData = [
         <h2 className="font-semibold mb-3 flex items-center gap-2">
           <Target className="w-5 h-5" /> Suggerimenti di ribilanciamento
         </h2>
+        <p className="text-sm text-gray-600 mb-3">
+  Budget mensile disponibile: <span className="font-semibold">{formatCurrency(MONTHLY_BUDGET)}</span>
+</p>
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead>

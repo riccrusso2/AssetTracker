@@ -105,9 +105,9 @@ export default function PortfolioDashboard() {
         id: "ftseallworld",
         name: "FTSE All-World USD (Acc)",
         identifier: "IE00BK5BQT80",
-        quantity: 58.02327,
+        quantity: 94.164474,
         currency: "",
-        costBasis: 132.05,
+        costBasis: 135.54,
         targetWeight: 77,
         lastPrice: null,
         lastUpdated: null,
@@ -117,7 +117,7 @@ export default function PortfolioDashboard() {
         id: "coremsciemimi",
         name: "Core MSCI EM IMI USD (Acc)",
         identifier: "IE00BKM4GZ66",
-        quantity: 13.41813,
+        quantity: 13.414813,
         currency: "",
         costBasis: 37.42,
         targetWeight: 3 ,
@@ -129,9 +129,9 @@ export default function PortfolioDashboard() {
         id: "gold",
         name: "Physical Gold USD (Acc)",
         identifier: "IE00B4ND3602",
-        quantity:16.8364,
+        quantity:26.8364,
         currency: "",
-        costBasis: 54.88,
+        costBasis: 58.28,
         targetWeight: 10,
         lastPrice: null,
         lastUpdated: null,
@@ -155,9 +155,9 @@ export default function PortfolioDashboard() {
         id: "quantum",
         name: "VanEck Quantum Computing UCITS ETF A",
         identifier: "IE0007Y8Y157",
-        quantity: 11.737449,
+        quantity: 14.649635,
         currency: "",
-        costBasis: 20.62,
+        costBasis: 20.96,
         targetWeight: 1,
         lastPrice: null,
         lastUpdated: null,
@@ -192,8 +192,8 @@ export default function PortfolioDashboard() {
     ];
   });
 
-  const MONTHLY_BUDGET = 7135; // € da investire ogni mese
-  const totalCash = 10000; // esempio, la liquidità totale
+  const MONTHLY_BUDGET = 500; // € da investire ogni mese
+  const totalCash = 10500; // esempio, la liquidità totale
 
   const [history, setHistory] = useState(() => {
     const fromLS = localStorage.getItem(LS_HISTORY);

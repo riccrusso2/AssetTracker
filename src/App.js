@@ -865,7 +865,7 @@ const allocationData = [
     <div>
       <span className="text-gray-500">Totale portafoglio: </span>
       <span className="font-semibold">
-        {formatCurrency(totals.totalValue + totalCash + totalPEValue)}
+        {formatCurrency(totalEquityValue  + totalCash + totalPEValue)}
       </span>
     </div>
   </div>

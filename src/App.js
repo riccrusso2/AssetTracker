@@ -117,9 +117,9 @@ export default function PortfolioDashboard() {
         id: "coremsciemimi",
         name: "Core MSCI EM IMI USD (Acc)",
         identifier: "IE00BKM4GZ66",
-        quantity: 8.108108,
+        quantity: 13.41813,
         currency: "",
-        costBasis: 37.12,
+        costBasis: 37.42,
         targetWeight: 3 ,
         lastPrice: null,
         lastUpdated: null,
@@ -143,9 +143,9 @@ export default function PortfolioDashboard() {
         name: "Bitcoin",
         identifier: "BTC", // non ha ISIN
         ticker: "BTC", // useremo questo per fetch separato
-        quantity: 0.004131, // esempio, cambia con il tuo
+        quantity: 0.006574, // esempio, cambia con il tuo
         currency: "",
-        costBasis: 95481.04 , // prezzo medio di carico
+        costBasis: 98787.12 , // prezzo medio di carico
         targetWeight: 4, // obiettivo percentuale
         lastPrice: null,
         lastUpdated: null,
@@ -860,6 +860,12 @@ const allocationData = [
     <div>
       <span className="text-gray-500">Valore attuale: </span>
       <span className="font-semibold">{formatCurrency(totals.totalValue)}</span>
+    </div>
+    <div>
+      <span className="text-gray-500">Totale portafoglio: </span>
+      <span className="font-semibold">
+        {formatCurrency(totals.totalValue + cash + startupTotalInvested)}
+      </span>
     </div>
   </div>
 </div>

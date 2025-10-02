@@ -228,6 +228,7 @@ export default function PortfolioDashboard() {
 );
 const totalPEValue = startup.reduce((acc, p) => acc + (p.invested || 0), 0);
   
+  
 
 
  // --- Derived stats ---
@@ -864,7 +865,7 @@ const allocationData = [
     <div>
       <span className="text-gray-500">Totale portafoglio: </span>
       <span className="font-semibold">
-        {formatCurrency(totals.totalValue + cash + startupTotalInvested)}
+        {formatCurrency(totals.totalValue + totalCash + totalPEValue)}
       </span>
     </div>
   </div>

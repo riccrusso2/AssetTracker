@@ -167,7 +167,7 @@ export default function PortfolioDashboard() {
     id: "eqt-nexus",
     name: "EQT Nexus ELTIF",
     identifier: "LU3176111881",
-    quantity: 404, // o quante quote hai
+    quantity: 1, // o quante quote hai
     currency: "",
     costBasis: 404,
     targetWeight: 2.5, // puoi metterlo al valore desiderato
@@ -180,7 +180,7 @@ export default function PortfolioDashboard() {
     id: "apollo-global",
     name: "Apollo Global Private Markets ELTIF",
     identifier: "LU3170240538",
-    quantity: 404,
+    quantity: 1,
     currency: "",
     costBasis: 404,
     targetWeight: 2.5,

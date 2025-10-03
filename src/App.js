@@ -696,86 +696,83 @@ const allocationData = [
 
       {/* Tabella asset */}
       <section className="bg-white p-4 rounded-2xl shadow">
-        <h2 className="font-semibold mb-4">Asset nel portafoglio</h2>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm border-collapse">
-            <thead>
-              <tr className="bg-gray-50 text-gray-600 border-b">
-                <th className="py-2 px-3 text-left">Nome</th>
-                <th className="px-3 text-left">Ticker/ISIN</th>
-                <th className="px-3 text-right">Prezzo unitario</th>
-                <th className="px-3 text-right">Valore attuale</th>
-                <th className="px-3 text-right">Perf. €</th>
-                <th className="px-3 text-center">Perf. %</th>
-                <th className="px-3 text-center">Peso attuale</th>
-                <th className="px-3 text-right">Asset Class</th>
-              </tr>
-            </thead>
-            <tbody>
-              {assets.map((a, i) => {
-                const value = a.lastPrice ? a.lastPrice * (a.quantity || 0) : 0;
-                const perfEuro =
-                  a.costBasis && a.lastPrice
-                    ? (a.lastPrice - a.costBasis) * (a.quantity || 0)
-                    : 0;
-                const perfPct =
-                  a.costBasis && a.lastPrice
-                    ? ((a.lastPrice - a.costBasis) / a.costBasis) * 100
-                    : 0;
-                const weight = weights.find((item) => item.id === a.id)?.weight || 0;
+  <h2 className="font-semibold mb-4">Asset nel portafoglio</h2>
+  <div className="overflow-x-auto">
+    <table className="w-full text-sm border-collapse">
+      <thead>
+        <tr className="bg-gray-50 text-gray-600 border-b">
+          <th className="py-2 px-3 text-left">Nome</th>
+          <th className="px-3 text-left">Ticker/ISIN</th>
+          <th className="px-3 text-right">Valore attuale</th>
+          <th className="px-3 text-right">Perf. €</th>
+          <th className="px-3 text-right">Perf. %</th>
+          <th className="px-3 text-right">Peso attuale</th>
+          <th className="px-3 text-right">Peso target</th>
+          <th className="px-3 text-right">Asset Class</th>
+        </tr>
+      </thead>
+      <tbody>
+        {assets.map((a, i) => {
+          const value = a.lastPrice ? a.lastPrice * (a.quantity || 0) : 0;
+          const perfEuro =
+            a.costBasis && a.lastPrice
+              ? (a.lastPrice - a.costBasis) * (a.quantity || 0)
+              : 0;
+          const perfPct =
+            a.costBasis && a.lastPrice
+              ? ((a.lastPrice - a.costBasis) / a.costBasis) * 100
+              : 0;
+          const weight = weights.find((item) => item.id === a.id)?.weight || 0;
 
-                return (
-                  <tr
-                    key={a.id}
-                    className={`border-b ${
-                      i % 2 === 0 ? "bg-white" : "bg-gray-50"
-                    } hover:bg-gray-100`}
-                  >
-                    <td className="py-2 px-3 font-medium">{a.name}</td>
-                    <td className="px-3 text-gray-500">{a.identifier}</td>
-                  
-                    {/* Prezzo unitario */}
-                    <td className="px-3 text-right">
-                      {loadingIds[a.id]
-                        ? "↻"
-                        : a.lastPrice !== null
-                        ? `${formatCurrency(a.lastPrice)} ${a.currency || ""}`
-                        : "—"}
-                    </td>
-                  
-                    {/* Valore attuale */}
-                    <td className="px-3 text-right">
-                      {formatCurrency(value)}
-                    </td>
-                  
-                    {/* Perf. € con colore condizionale */}
-                    <td
-                      className={`px-3 text-right ${
-                        perfEuro >= 0 ? "text-green-600" : "text-red-600"
-                      }`}
-                    >
-                      {perfEuro >= 0 ? "+" : "-"}
-                      {formatCurrency(Math.abs(perfEuro))}
-                    </td>
-                  
-                    {/* Perf. % */}
-                    <td className="px-3 text-center">
-                      <PerfBadge value={perfPct} />
-                    </td>
-                  
-                    {/* Peso */}
-                    <td className="px-3 text-center">{weight.toFixed(2)}%</td>
-                  
-                    {/* Asset Class */}
-                    <td className="px-3 text-center">{a.assetClass}</td>
-                  </tr>
+          return (
+            <tr
+              key={a.id}
+              className={`border-b ${
+                i % 2 === 0 ? "bg-white" : "bg-gray-50"
+              } hover:bg-gray-100`}
+            >
+              {/* Nome */}
+              <td className="py-2 px-3 font-medium text-left">{a.name}</td>
 
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </section>
+              {/* Ticker/ISIN */}
+              <td className="px-3 text-gray-500 text-left">{a.identifier}</td>
+
+              {/* Valore attuale */}
+              <td className="px-3 text-right">
+                {formatCurrency(value)}
+              </td>
+
+              {/* Perf. € */}
+              <td
+                className={`px-3 text-right ${
+                  perfEuro >= 0 ? "text-green-600" : "text-red-600"
+                }`}
+              >
+                {perfEuro >= 0 ? "+" : "-"}
+                {formatCurrency(Math.abs(perfEuro))}
+              </td>
+
+              {/* Perf. % */}
+              <td className="px-3 text-right">
+                <PerfBadge value={perfPct} />
+              </td>
+
+              {/* Peso attuale */}
+              <td className="px-3 text-right">{weight.toFixed(2)}%</td>
+
+              {/* Peso target */}
+              <td className="px-3 text-right">{a.targetWeight}%</td>
+
+              {/* Asset Class */}
+              <td className="px-3 text-right">{a.assetClass}</td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  </div>
+</section>
+
 
       <section className="bg-white p-4 rounded-2xl shadow">
   <h2 className="font-semibold mb-4">Investimenti startup</h2>

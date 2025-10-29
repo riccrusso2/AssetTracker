@@ -113,6 +113,42 @@ export default function PortfolioDashboard() {
         lastUpdated: null,
         assetClass: "ETF", 
       },
+    {
+        id: "worldquality",
+        name: "iShares Edge MSCI World Quality Factor UCITS ETF (Acc)",
+        identifier: "IE00BK5BQT80",
+        quantity: 0,
+        currency: "",
+        costBasis: 0,
+        targetWeight: 8,
+        lastPrice: null,
+        lastUpdated: null,
+        assetClass: "ETF", 
+      },
+    {
+        id: "worldmomentum",
+        name: "iShares Edge MSCI World Momentum Factor UCITS ETF (Acc)",
+        identifier: "IE00BK5BQT80",
+        quantity: 0,
+        currency: "",
+        costBasis: 0,
+        targetWeight: 6,
+        lastPrice: null,
+        lastUpdated: null,
+        assetClass: "ETF", 
+      },
+    {
+        id: "worldvalue",
+        name: "iShares Edge MSCI World Value Factor UCITS ETF (Acc)",
+        identifier: "IE00BK5BQT80",
+        quantity: 0,
+        currency: "",
+        costBasis: 0,
+        targetWeight: 6,
+        lastPrice: null,
+        lastUpdated: null,
+        assetClass: "ETF", 
+      },
       {
         id: "gold",
         name: "Physical Gold USD (Acc)",
@@ -180,7 +216,7 @@ export default function PortfolioDashboard() {
     ];
   });
 
-  const MONTHLY_BUDGET = 1000; // € da investire ogni mese
+  const MONTHLY_BUDGET = 1200; // € da investire ogni mese
   const totalCash = 10500; // esempio, la liquidità totale
 
   const [history, setHistory] = useState(() => {

@@ -116,7 +116,7 @@ export default function PortfolioDashboard() {
     {
         id: "worldquality",
         name: "iShares Edge MSCI World Quality Factor UCITS ETF (Acc)",
-        identifier: "IE00BK5BQT80",
+        identifier: "IE00BP3QZ601",
         quantity: 0,
         currency: "",
         costBasis: 0,
@@ -128,7 +128,7 @@ export default function PortfolioDashboard() {
     {
         id: "worldmomentum",
         name: "iShares Edge MSCI World Momentum Factor UCITS ETF (Acc)",
-        identifier: "IE00BK5BQT80",
+        identifier: "IE00BP3QZ825",
         quantity: 0,
         currency: "",
         costBasis: 0,
@@ -140,7 +140,7 @@ export default function PortfolioDashboard() {
     {
         id: "worldvalue",
         name: "iShares Edge MSCI World Value Factor UCITS ETF (Acc)",
-        identifier: "IE00BK5BQT80",
+        identifier: "IE00BP3QZB59",
         quantity: 0,
         currency: "",
         costBasis: 0,

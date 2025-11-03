@@ -186,34 +186,37 @@ export default function PortfolioDashboard() {
         lastPrice: null,
         lastUpdated: null,
       assetClass: "ETF", 
-      },
-    {
-    id: "eqt-nexus",
-    name: "EQT Nexus ELTIF",
-    identifier: "LU3176111881",
-    quantity: 1, // o quante quote hai
-    currency: "",
-    costBasis: 434,
-    targetWeight: 2.5, // puoi metterlo al valore desiderato
-    lastPrice: 434, // inizialmente uguale al costo di carico
-    lastUpdated: null,
-    assetClass: "Private equity",
-    manual: true, // 🔹 flag custom per saltare fetch
-  },
-  {
-    id: "apollo-global",
-    name: "Apollo Global Private Markets ELTIF",
-    identifier: "LU3170240538",
-    quantity: 1,
-    currency: "",
-    costBasis: 434,
-    targetWeight: 2.5,
-    lastPrice: 434,
-    lastUpdated: null,
-    assetClass: "Private equity",
-    manual: true, // 🔹 flag custom per saltare fetch
-  },
+      }
     ];
+  });
+
+  // 💼 Stato separato per Private Equity
+  const [privateEquity, setPrivateEquity] = useState(() => {
+    const fromLS = localStorage.getItem("pf.privateequity.v1");
+    return fromLS
+      ? JSON.parse(fromLS)
+      : [
+          {
+            id: "eqt-nexus",
+            name: "EQT Nexus ELTIF",
+            identifier: "LU3176111881",
+            costBasis: 434,
+            lastPrice: 434,
+            targetWeight: 0,
+            assetClass: "Private equity",
+            manual: true,
+          },
+          {
+            id: "apollo-global",
+            name: "Apollo Global Private Markets ELTIF",
+            identifier: "LU3170240538",
+            costBasis: 434,
+            lastPrice: 434,
+            targetWeight: 0,
+            assetClass: "Private equity",
+            manual: true,
+          },
+        ];
   });
 
   const MONTHLY_BUDGET = 500; // € da investire ogni mese
@@ -737,7 +740,7 @@ const allocationData = [
         </tr>
       </thead>
       <tbody>
-        {assets.map((a, i) => {
+    {assets.filter(a => a.assetClass !== "Private equity").map((a, i) => {
           const value = a.lastPrice ? a.lastPrice * (a.quantity || 0) : 0;
           const perfEuro =
             a.costBasis && a.lastPrice
@@ -825,6 +828,37 @@ const allocationData = [
     </table>
   </div>
 </section>
+
+{/* --- Tabella Private Equity --- */}
+<section className="bg-white p-4 rounded-2xl shadow">
+  <h2 className="font-semibold mb-4">Investimenti Private Equity</h2>
+  <div className="overflow-x-auto">
+    <table className="w-full text-sm border-collapse">
+      <thead>
+        <tr className="bg-gray-50 text-gray-600 border-b">
+          <th className="py-2 px-3 text-left">Nome Fondo</th>
+          <th className="px-3 text-right">Prezzo acquisto</th>
+          <th className="px-3 text-right">Prezzo attuale</th>
+        </tr>
+      </thead>
+      <tbody>
+        {privateEquity.map((f, i) => (
+          <tr
+            key={f.id}
+            className={`border-b ${
+              i % 2 === 0 ? "bg-white" : "bg-gray-50"
+            } hover:bg-gray-100`}
+          >
+            <td className="py-2 px-3 font-medium">{f.name}</td>
+            <td className="px-3 text-right">{formatCurrency(f.costBasis)}</td>
+            <td className="px-3 text-right">{formatCurrency(f.lastPrice)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+</section>
+
 
 
 

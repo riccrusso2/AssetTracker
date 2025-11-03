@@ -117,9 +117,9 @@ export default function PortfolioDashboard() {
         id: "worldquality",
         name: "iShares Edge MSCI World Quality Factor UCITS ETF (Acc)",
         identifier: "IE00BP3QZ601",
-        quantity: 0,
+        quantity: 8,
         currency: "",
-        costBasis: 0,
+        costBasis: 67.52,
         targetWeight: 8,
         lastPrice: null,
         lastUpdated: null,
@@ -129,9 +129,9 @@ export default function PortfolioDashboard() {
         id: "worldmomentum",
         name: "iShares Edge MSCI World Momentum Factor UCITS ETF (Acc)",
         identifier: "IE00BP3QZ825",
-        quantity: 0,
+        quantity: 5,
         currency: "",
-        costBasis: 0,
+        costBasis: 83.4,
         targetWeight: 6,
         lastPrice: null,
         lastUpdated: null,
@@ -141,9 +141,9 @@ export default function PortfolioDashboard() {
         id: "worldvalue",
         name: "iShares Edge MSCI World Value Factor UCITS ETF (Acc)",
         identifier: "IE00BP3QZB59",
-        quantity: 0,
+        quantity: 8,
         currency: "",
-        costBasis: 0,
+        costBasis: 48.89,
         targetWeight: 6,
         lastPrice: null,
         lastUpdated: null,
@@ -167,9 +167,9 @@ export default function PortfolioDashboard() {
         name: "Bitcoin",
         identifier: "BTC", // non ha ISIN
         ticker: "BTC", // useremo questo per fetch separato
-        quantity: 0.006574, // esempio, cambia con il tuo
+        quantity: 0.007249, // esempio, cambia con il tuo
         currency: "",
-        costBasis: 98787.12 , // prezzo medio di carico
+        costBasis: 98544.57 , // prezzo medio di carico
         targetWeight: 4, // obiettivo percentuale
         lastPrice: null,
         lastUpdated: null,
@@ -193,9 +193,9 @@ export default function PortfolioDashboard() {
     identifier: "LU3176111881",
     quantity: 1, // o quante quote hai
     currency: "",
-    costBasis: 404,
+    costBasis: 434,
     targetWeight: 2.5, // puoi metterlo al valore desiderato
-    lastPrice: 404, // inizialmente uguale al costo di carico
+    lastPrice: 434, // inizialmente uguale al costo di carico
     lastUpdated: null,
     assetClass: "Private equity",
     manual: true, // 🔹 flag custom per saltare fetch
@@ -206,9 +206,9 @@ export default function PortfolioDashboard() {
     identifier: "LU3170240538",
     quantity: 1,
     currency: "",
-    costBasis: 404,
+    costBasis: 434,
     targetWeight: 2.5,
-    lastPrice: 404,
+    lastPrice: 434,
     lastUpdated: null,
     assetClass: "Private equity",
     manual: true, // 🔹 flag custom per saltare fetch
@@ -216,8 +216,8 @@ export default function PortfolioDashboard() {
     ];
   });
 
-  const MONTHLY_BUDGET = 1500; // € da investire ogni mese
-  const totalCash = 10500; // esempio, la liquidità totale
+  const MONTHLY_BUDGET = 500; // € da investire ogni mese
+  const totalCash = 10950; // esempio, la liquidità totale
 
   const [history, setHistory] = useState(() => {
     const fromLS = localStorage.getItem(LS_HISTORY);

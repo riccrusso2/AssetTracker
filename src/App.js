@@ -108,7 +108,7 @@ export default function PortfolioDashboard() {
         quantity: 94.164474,
         currency: "",
         costBasis: 135.54,
-        targetWeight: 60,
+        targetWeight: 65,
         lastPrice: null,
         lastUpdated: null,
         assetClass: "ETF", 

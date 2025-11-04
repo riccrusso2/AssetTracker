@@ -255,9 +255,12 @@ export default function PortfolioDashboard() {
   0
 );
 const totalPEValue = startup.reduce((acc, p) => acc + (p.invested || 0), 0);
+const totalPrivateEquityValue = privateEquity.reduce(
+  (acc, f) => acc + (f.lastPrice || 0),
+  0
+);
   
   
-
 
  // --- Derived stats ---
 const totals = useMemo(() => {
@@ -309,23 +312,33 @@ const classDistribution = useMemo(() => {
   }));
 }, [assets]);
 
-// 2. Asset class + startup
+// 2. Asset class + startup + private equity
 const classWithStartup = useMemo(() => {
   const base = [...classDistribution];
+
   if (totalPEValue > 0) {
     base.push({ name: "Startup", value: round2(totalPEValue) });
   }
-  return base;
-}, [classDistribution, totalPEValue]);
 
-// 3. Asset class + startup + liquidità
+  if (totalPrivateEquityValue > 0) {
+    base.push({ name: "Private Equity", value: round2(totalPrivateEquityValue) });
+  }
+
+  return base;
+}, [classDistribution, totalPEValue, totalPrivateEquityValue]);
+
+
+// 3. Asset class + startup + private equity + liquidità
 const classWithStartupAndCash = useMemo(() => {
   const base = [...classWithStartup];
+
   if (totalCash > 0) {
     base.push({ name: "Liquidità", value: round2(totalCash) });
   }
+
   return base;
-}, [classWithStartup, totalCash]);
+}, [classWithStartup, totalCash, totalPEValue, totalPrivateEquityValue]);
+
 
 const returns = history.map((h, i) =>
   i === 0 ? 0 : (h.v - history[i - 1].v) / history[i - 1].v
@@ -457,7 +470,8 @@ const contributions = assets.map((a) => {
 
 const allocationData = [
   { name: "Azioni", value: totalEquityValue },
-  { name: "startup", value: totalPEValue },
+  { name: "Startup", value: totalPEValue },
+  { name: "Private Equity", value: totalPrivateEquityValue },
 ];
 
   // --- Handlers ---
@@ -921,7 +935,7 @@ const allocationData = [
     <div>
       <span className="text-gray-500">Totale portafoglio: </span>
       <span className="font-semibold">
-        {formatCurrency(totalEquityValue  + totalCash + totalPEValue)}
+        {formatCurrency(totalEquityValue + totalCash + totalPEValue + totalPrivateEquityValue)}
       </span>
     </div>
   </div>
@@ -930,90 +944,115 @@ const allocationData = [
 
 
       {/* Grafici */}
-
 <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="bg-white p-4 rounded-2xl shadow">
-  <h3 className="font-semibold mb-2 flex items-center gap-2">
-    <PieChartIcon className="w-5 h-5" /> Distribuzione per Asset Class
-  </h3>
-  <div className="h-72">
-    <ResponsiveContainer width="100%" height="100%">
-      <PieChart>
-        <Pie
-          data={classDistribution}
-          dataKey="value"
-          nameKey="name"
-          cx="50%"
-          cy="50%"
-          outerRadius={110}
-          label={(d) => d.name}
-        >
-          {classDistribution.map((entry, index) => (
-            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-          ))}
-        </Pie>
-        <ReTooltip formatter={(v, name) => [`${round2((v / totals.totalValue) * 100)}%`, name]} />
-      </PieChart>
-    </ResponsiveContainer>
+
+  {/* --- 1. Solo Asset Class --- */}
+  <div className="bg-white p-4 rounded-2xl shadow">
+    <h3 className="font-semibold mb-2 flex items-center gap-2">
+      <PieChartIcon className="w-5 h-5" /> Distribuzione per Asset Class
+    </h3>
+    <div className="h-72">
+      <ResponsiveContainer width="100%" height="100%">
+        <PieChart>
+          <Pie
+            data={classDistribution}
+            dataKey="value"
+            nameKey="name"
+            cx="50%"
+            cy="50%"
+            outerRadius={110}
+            label={(d) => d.name}
+          >
+            {classDistribution.map((entry, index) => (
+              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+            ))}
+          </Pie>
+          <ReTooltip
+            formatter={(v, name) => [
+              `${round2((v / totals.totalValue) * 100)}%`,
+              name,
+            ]}
+          />
+        </PieChart>
+      </ResponsiveContainer>
+    </div>
   </div>
-</div>
 
-        <div className="bg-white p-4 rounded-2xl shadow">
-  <h3 className="font-semibold mb-2 flex items-center gap-2">
-    <PieChartIcon className="w-5 h-5" /> Distribuzione per Asset Class + Startup
-  </h3>
-  <div className="h-72">
-    <ResponsiveContainer width="100%" height="100%">
-      <PieChart>
-        <Pie
-          data={classWithStartup}
-          dataKey="value"
-          nameKey="name"
-          cx="50%"
-          cy="50%"
-          outerRadius={110}
-          label={(d) => d.name}
-        >
-          {classWithStartup.map((entry, index) => (
-            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-          ))}
-        </Pie>
-        <ReTooltip formatter={(v, name) => [`${round2((v / (totals.totalValue + totalPEValue)) * 100)}%`, name]} />
-      </PieChart>
-    </ResponsiveContainer>
+  {/* --- 2. Asset Class + Startup + Private Equity --- */}
+  <div className="bg-white p-4 rounded-2xl shadow">
+    <h3 className="font-semibold mb-2 flex items-center gap-2">
+      <PieChartIcon className="w-5 h-5" /> Distribuzione per Asset Class + Startup + Private Equity
+    </h3>
+    <div className="h-72">
+      <ResponsiveContainer width="100%" height="100%">
+        <PieChart>
+          <Pie
+            data={classWithStartup}
+            dataKey="value"
+            nameKey="name"
+            cx="50%"
+            cy="50%"
+            outerRadius={110}
+            label={(d) => d.name}
+          >
+            {classWithStartup.map((entry, index) => (
+              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+            ))}
+          </Pie>
+          <ReTooltip
+            formatter={(v, name) => [
+              `${round2(
+                (v / (totals.totalValue + totalPEValue + totalPrivateEquityValue)) * 100
+              )}%`,
+              name,
+            ]}
+          />
+        </PieChart>
+      </ResponsiveContainer>
+    </div>
   </div>
-</div>
 
-    <div className="bg-white p-4 rounded-2xl shadow">
-  <h3 className="font-semibold mb-2 flex items-center gap-2">
-    <PieChartIcon className="w-5 h-5" /> Distribuzione per Asset Class + Startup + Liquidità
-  </h3>
-  <div className="h-72">
-    <ResponsiveContainer width="100%" height="100%">
-      <PieChart>
-        <Pie
-          data={classWithStartupAndCash}
-          dataKey="value"
-          nameKey="name"
-          cx="50%"
-          cy="50%"
-          outerRadius={110}
-          label={(d) => d.name}
-        >
-          {classWithStartupAndCash.map((entry, index) => (
-            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-          ))}
-        </Pie>
-        <ReTooltip formatter={(v, name) => [
-          `${round2((v / (totals.totalValue + totalPEValue + totalCash)) * 100)}%`, name
-        ]} />
-      </PieChart>
-    </ResponsiveContainer>
+  {/* --- 3. Asset Class + Startup + Private Equity + Liquidità --- */}
+  <div className="bg-white p-4 rounded-2xl shadow">
+    <h3 className="font-semibold mb-2 flex items-center gap-2">
+      <PieChartIcon className="w-5 h-5" /> Distribuzione per Asset Class + Startup + Private Equity + Liquidità
+    </h3>
+    <div className="h-72">
+      <ResponsiveContainer width="100%" height="100%">
+        <PieChart>
+          <Pie
+            data={classWithStartupAndCash}
+            dataKey="value"
+            nameKey="name"
+            cx="50%"
+            cy="50%"
+            outerRadius={110}
+            label={(d) => d.name}
+          >
+            {classWithStartupAndCash.map((entry, index) => (
+              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+            ))}
+          </Pie>
+          <ReTooltip
+            formatter={(v, name) => [
+              `${round2(
+                (v /
+                  (totals.totalValue +
+                    totalPEValue +
+                    totalPrivateEquityValue +
+                    totalCash)) *
+                  100
+              )}%`,
+              name,
+            ]}
+          />
+        </PieChart>
+      </ResponsiveContainer>
+    </div>
   </div>
-</div>
 
+</section>
 
-          </section>
 
 
       {/* Suggerimenti per ribilanciamento */}

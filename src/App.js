@@ -904,8 +904,9 @@ const allocationData = [
   </div>
 </section>
 
-</div>  {/* chiude il div aperto in return (riga 1) */}
-);       {/* chiude il return */}
+  </div>
+);
+
 
 
 

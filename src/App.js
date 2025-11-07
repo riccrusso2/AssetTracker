@@ -753,7 +753,7 @@ const allocationData = [
       <section className="bg-white p-4 rounded-2xl shadow">
   <h2 className="font-semibold mb-4">Asset nel portafoglio</h2>
         <span className="text-sm text-gray-600">
-    Totale: {formatCurrency(totalPEValue)}
+    Totale: {formatCurrency(totalEquityValue)}
   </span>
   <div className="overflow-x-auto">
     <table className="w-full text-sm border-collapse">

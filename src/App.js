@@ -751,13 +751,10 @@ const allocationData = [
 
       {/* Tabella asset */}
       <section className="bg-white p-4 rounded-2xl shadow">
-  <div className="flex items-center justify-between mb-4">
-  <h2 className="font-semibold">Asset nel portafoglio</h2>
-  <span className="text-sm text-gray-600">
-    Totale: {formatCurrency(totalEquityValue)}
+  <h2 className="font-semibold mb-4">Asset nel portafoglio</h2>
+        <span className="text-sm text-gray-600">
+    Totale: {formatCurrency(totalPEValue)}
   </span>
-</div>
-
   <div className="overflow-x-auto">
     <table className="w-full text-sm border-collapse">
       <thead>
@@ -836,13 +833,10 @@ const allocationData = [
 
 
       <section className="bg-white p-4 rounded-2xl shadow">
-  <div className="flex items-center justify-between mb-4">
-  <h2 className="font-semibold">Investimenti startup</h2>
-  <span className="text-sm text-gray-600">
+  <h2 className="font-semibold mb-4">Investimenti startup</h2>
+         <span className="text-sm text-gray-600">
     Totale: {formatCurrency(totalPEValue)}
   </span>
-</div>
-
   <div className="overflow-x-auto">
     <table className="w-full text-sm border-collapse">
       <thead>
@@ -870,13 +864,10 @@ const allocationData = [
 
 {/* --- Tabella Private Equity --- */}
 <section className="bg-white p-4 rounded-2xl shadow">
-  <div className="flex items-center justify-between mb-4">
-  <h2 className="font-semibold">Investimenti Private Equity</h2>
+  <h2 className="font-semibold mb-4">Investimenti Private Equity</h2>
   <span className="text-sm text-gray-600">
     Totale: {formatCurrency(totalPrivateEquityValue)}
   </span>
-</div>
-
   <div className="overflow-x-auto">
     <table className="w-full text-sm border-collapse">
       <thead>
@@ -899,16 +890,10 @@ const allocationData = [
             <td className="px-3 text-right">{formatCurrency(f.lastPrice)}</td>
           </tr>
         ))}
-            </tbody>
+      </tbody>
     </table>
   </div>
 </section>
-
-  </div>
-);
-
-
-
 
 
 
@@ -981,6 +966,39 @@ const allocationData = [
 
 
       {/* Grafici */}
+<section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+  {/* --- 1. Solo Asset Class --- */}
+  <div className="bg-white p-4 rounded-2xl shadow">
+    <h3 className="font-semibold mb-2 flex items-center gap-2">
+      <PieChartIcon className="w-5 h-5" /> Distribuzione per Asset Class
+    </h3>
+    <div className="h-72">
+      <ResponsiveContainer width="100%" height="100%">
+        <PieChart>
+          <Pie
+            data={classDistribution}
+            dataKey="value"
+            nameKey="name"
+            cx="50%"
+            cy="50%"
+            outerRadius={110}
+            label={(d) => d.name}
+          >
+            {classDistribution.map((entry, index) => (
+              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+            ))}
+          </Pie>
+          <ReTooltip
+            formatter={(v, name) => [
+              `${round2((v / totals.totalValue) * 100)}%`,
+              name,
+            ]}
+          />
+        </PieChart>
+      </ResponsiveContainer>
+    </div>
+  </div>
 
   {/* --- 2. Asset Class + Startup + Private Equity --- */}
   <div className="bg-white p-4 rounded-2xl shadow">

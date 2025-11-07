@@ -749,14 +749,14 @@ const allocationData = [
         </button>
       </header>
 
-      {/* --- Tabella asset --- */}
-<section className="bg-white p-4 rounded-2xl shadow">
+      {/* Tabella asset */}
+      <section className="bg-white p-4 rounded-2xl shadow">
   <div className="flex items-center justify-between mb-4">
-    <h2 className="font-semibold">Asset nel portafoglio</h2>
-    <span className="text-sm text-gray-600">
-      Totale: {formatCurrency(totalEquityValue)}
-    </span>
-  </div>
+  <h2 className="font-semibold">Asset nel portafoglio</h2>
+  <span className="text-sm text-gray-600">
+    Totale: {formatCurrency(totalEquityValue)}
+  </span>
+</div>
 
   <div className="overflow-x-auto">
     <table className="w-full text-sm border-collapse">
@@ -773,63 +773,75 @@ const allocationData = [
         </tr>
       </thead>
       <tbody>
-        {assets
-          .filter((a) => a.assetClass !== "Private equity")
-          .map((a, i) => {
-            const value = a.lastPrice ? a.lastPrice * (a.quantity || 0) : 0;
-            const perfEuro =
-              a.costBasis && a.lastPrice
-                ? (a.lastPrice - a.costBasis) * (a.quantity || 0)
-                : 0;
-            const perfPct =
-              a.costBasis && a.lastPrice
-                ? ((a.lastPrice - a.costBasis) / a.costBasis) * 100
-                : 0;
-            const weight =
-              weights.find((item) => item.id === a.id)?.weight || 0;
+    {assets.filter(a => a.assetClass !== "Private equity").map((a, i) => {
+          const value = a.lastPrice ? a.lastPrice * (a.quantity || 0) : 0;
+          const perfEuro =
+            a.costBasis && a.lastPrice
+              ? (a.lastPrice - a.costBasis) * (a.quantity || 0)
+              : 0;
+          const perfPct =
+            a.costBasis && a.lastPrice
+              ? ((a.lastPrice - a.costBasis) / a.costBasis) * 100
+              : 0;
+          const weight = weights.find((item) => item.id === a.id)?.weight || 0;
 
-            return (
-              <tr
-                key={a.id}
-                className={`border-b ${
-                  i % 2 === 0 ? "bg-white" : "bg-gray-50"
-                } hover:bg-gray-100`}
+          return (
+            <tr
+              key={a.id}
+              className={`border-b ${
+                i % 2 === 0 ? "bg-white" : "bg-gray-50"
+              } hover:bg-gray-100`}
+            >
+              {/* Nome */}
+              <td className="py-2 px-3 font-medium text-left">{a.name}</td>
+
+              {/* Ticker/ISIN */}
+              <td className="px-3 text-gray-500 text-left">{a.identifier}</td>
+
+              {/* Valore attuale */}
+              <td className="px-3 text-right">
+                {formatCurrency(value)}
+              </td>
+
+              {/* Perf. € */}
+              <td
+                className={`px-3 text-right ${
+                  perfEuro >= 0 ? "text-green-600" : "text-red-600"
+                }`}
               >
-                <td className="py-2 px-3 font-medium text-left">{a.name}</td>
-                <td className="px-3 text-gray-500 text-left">
-                  {a.identifier}
-                </td>
-                <td className="px-3 text-right">{formatCurrency(value)}</td>
-                <td
-                  className={`px-3 text-right ${
-                    perfEuro >= 0 ? "text-green-600" : "text-red-600"
-                  }`}
-                >
-                  {perfEuro >= 0 ? "+" : "-"}
-                  {formatCurrency(Math.abs(perfEuro))}
-                </td>
-                <td className="px-3 text-right">
-                  <PerfBadge value={perfPct} />
-                </td>
-                <td className="px-3 text-right">{weight.toFixed(2)}%</td>
-                <td className="px-3 text-right">{a.targetWeight}%</td>
-                <td className="px-3 text-right">{a.assetClass}</td>
-              </tr>
-            );
-          })}
+                {perfEuro >= 0 ? "+" : "-"}
+                {formatCurrency(Math.abs(perfEuro))}
+              </td>
+
+              {/* Perf. % */}
+              <td className="px-3 text-right">
+                <PerfBadge value={perfPct} />
+              </td>
+
+              {/* Peso attuale */}
+              <td className="px-3 text-right">{weight.toFixed(2)}%</td>
+
+              {/* Peso target */}
+              <td className="px-3 text-right">{a.targetWeight}%</td>
+
+              {/* Asset Class */}
+              <td className="px-3 text-right">{a.assetClass}</td>
+            </tr>
+          );
+        })}
       </tbody>
     </table>
   </div>
 </section>
 
-{/* --- Tabella startup --- */}
-<section className="bg-white p-4 rounded-2xl shadow">
+
+      <section className="bg-white p-4 rounded-2xl shadow">
   <div className="flex items-center justify-between mb-4">
-    <h2 className="font-semibold">Investimenti startup</h2>
-    <span className="text-sm text-gray-600">
-      Totale: {formatCurrency(totalPEValue)}
-    </span>
-  </div>
+  <h2 className="font-semibold">Investimenti startup</h2>
+  <span className="text-sm text-gray-600">
+    Totale: {formatCurrency(totalPEValue)}
+  </span>
+</div>
 
   <div className="overflow-x-auto">
     <table className="w-full text-sm border-collapse">
@@ -844,9 +856,7 @@ const allocationData = [
         {startup.map((p, i) => (
           <tr
             key={p.id}
-            className={`border-b ${
-              i % 2 === 0 ? "bg-white" : "bg-gray-50"
-            } hover:bg-gray-100`}
+            className={`border-b ${i % 2 === 0 ? "bg-white" : "bg-gray-50"} hover:bg-gray-100`}
           >
             <td className="py-2 px-3 font-medium">{p.name}</td>
             <td className="px-3 text-right">{formatCurrency(p.fee)}</td>
@@ -861,11 +871,11 @@ const allocationData = [
 {/* --- Tabella Private Equity --- */}
 <section className="bg-white p-4 rounded-2xl shadow">
   <div className="flex items-center justify-between mb-4">
-    <h2 className="font-semibold">Investimenti Private Equity</h2>
-    <span className="text-sm text-gray-600">
-      Totale: {formatCurrency(totalPrivateEquityValue)}
-    </span>
-  </div>
+  <h2 className="font-semibold">Investimenti Private Equity</h2>
+  <span className="text-sm text-gray-600">
+    Totale: {formatCurrency(totalPrivateEquityValue)}
+  </span>
+</div>
 
   <div className="overflow-x-auto">
     <table className="w-full text-sm border-collapse">
@@ -889,10 +899,14 @@ const allocationData = [
             <td className="px-3 text-right">{formatCurrency(f.lastPrice)}</td>
           </tr>
         ))}
-      </tbody>
+            </tbody>
     </table>
   </div>
 </section>
+
+</div>  {/* chiude il div aperto in return (riga 1) */}
+);       {/* chiude il return */}
+
 
 
 

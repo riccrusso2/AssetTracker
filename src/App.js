@@ -63,6 +63,7 @@ function isMaybeISIN(v) {
   return /^[A-Z0-9]{12}$/i.test((v || "").trim());
 }
 
+
 function formatCurrency(n, currency = "EUR") {
   if (n == null || Number.isNaN(n)) return "—";
   try {
@@ -79,6 +80,34 @@ function formatCurrency(n, currency = "EUR") {
 function round2(n) {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
+
+
+function computeIntegerPurchases(actions, budget) {
+  let remaining = budget;
+
+  return actions.map(x => {
+    const price = x.lastPrice || 0;
+    if (price <= 0) {
+      return { ...x, integerQty: 0, integerValue: 0 };
+    }
+
+    // quantità teorica
+    let maxQty = Math.floor(x.monthlyBuyEUR / price);
+
+    // limita al budget residuo
+    let affordableQty = Math.min(maxQty, Math.floor(remaining / price));
+
+    let value = affordableQty * price;
+    remaining -= value;
+
+    return {
+      ...x,
+      integerQty: affordableQty,
+      integerValue: value
+    };
+  });
+}
+
 
 
 
@@ -233,6 +262,9 @@ export default function PortfolioDashboard() {
 
   const MONTHLY_BUDGET = 500; // € da investire ogni mese
   const totalCash = 10600; // esempio, la liquidità totale
+
+  const integerActions = computeIntegerPurchases(rebalance.actions, MONTHLY_BUDGET);
+
 
   const [history, setHistory] = useState(() => {
     const fromLS = localStorage.getItem(LS_HISTORY);
@@ -1088,36 +1120,41 @@ const allocationData = [
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead>
-              <tr className="text-sm text-gray-500 border-b">
-                <th className="py-2">Asset</th>
-                <th>Attuale %</th>
-                <th>Target % (normalizzato)</th>
-                <th>Delta valore</th>
-                <th>Quantità stimata</th>
-                <th className="text-right">Acquisto mese</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rebalance.actions.map((x) => (
-                <tr key={x.id} className="border-b">
-                  <td className="py-2">{x.name}</td>
-                  <td>{x.currentWeight.toFixed(2)}%</td>
-                  <td>{x.targetWeight.toFixed(2)}%</td>
-                  <td
-                    className={
-                      x.deltaValue >= 0 ? "text-green-600" : "text-red-600"
-                    }
-                  >
-                    {formatCurrency(x.deltaValue)}
-                  </td>
-                  <td>{x.qty.toFixed(4)}</td>
-                  <td className="text-right text-green-600">
-                    {formatCurrency(x.monthlyBuyEUR)}
-                  </td>
+  <tr className="text-sm text-gray-500 border-b">
+    <th className="py-2">Asset</th>
+    <th>Attuale %</th>
+    <th>Target % (normalizzato)</th>
+    <th>Delta valore</th>
+    <th>Quantità stimata</th>
+    <th>Quote intere</th>
+    <th className="text-right">Valore quote</th>
+    <th className="text-right">Acquisto mese (EUR)</th>
+  </tr>
+</thead>
 
-                </tr>
-              ))}
-            </tbody>
+<tbody>
+  {integerActions.map((x) => (
+    <tr key={x.id} className="border-b">
+      <td className="py-2">{x.name}</td>
+      <td>{x.currentWeight.toFixed(2)}%</td>
+      <td>{x.targetWeight.toFixed(2)}%</td>
+      <td className={x.deltaValue >= 0 ? "text-green-600" : "text-red-600"}>
+        {formatCurrency(x.deltaValue)}
+      </td>
+      <td>{x.qty.toFixed(4)}</td>
+      
+      {/* Nuova colonna: quote intere */}
+      <td>{x.integerQty}</td>
+
+      {/* Valore effettivo delle quote intere */}
+      <td className="text-right">{formatCurrency(x.integerValue)}</td>
+
+      <td className="text-right text-green-600">
+        {formatCurrency(x.monthlyBuyEUR)}
+      </td>
+    </tr>
+  ))}
+</tbody>
           </table>
         </div>
         <p className="text-xs text-gray-500 mt-2">

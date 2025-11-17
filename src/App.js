@@ -86,16 +86,21 @@ function computeIntegerPurchases(actions, budget) {
   let remaining = budget;
 
   return actions.map(x => {
-    const price = x.lastPrice || 0;
-    if (price <= 0) {
+    const price = x.lastPrice;
+    if (!price || price <= 0) {
       return { ...x, integerQty: 0, integerValue: 0 };
     }
 
-    // quantità teorica
+    // quantità teorica basata sul budget dell'asset
     let maxQty = Math.floor(x.monthlyBuyEUR / price);
 
-    // limita al budget residuo
+    // limita al budget residuo totale
     let affordableQty = Math.min(maxQty, Math.floor(remaining / price));
+
+    // sicurezza extra: assicurati che il costo non superi il residuo
+    while (affordableQty > 0 && affordableQty * price > remaining + 1e-6) {
+      affordableQty -= 1;
+    }
 
     let value = affordableQty * price;
     remaining -= value;
@@ -107,6 +112,7 @@ function computeIntegerPurchases(actions, budget) {
     };
   });
 }
+
 
 
 

@@ -83,35 +83,43 @@ function round2(n) {
 
 
 function computeIntegerPurchases(actions, budget) {
+  // Ordina gli asset per priorità (i più sottopesati prima)
+  const sorted = [...actions].sort((a, b) => b.deltaValue - a.deltaValue);
+
   let remaining = budget;
 
-  return actions.map(x => {
-    const price = x.lastPrice;
-    if (!price || price <= 0) {
-      return { ...x, integerQty: 0, integerValue: 0 };
+  // Prepara struttura iniziale con 0 quote
+  const purchases = sorted.map(x => ({
+    ...x,
+    integerQty: 0,
+    integerValue: 0
+  }));
+
+  let buying = true;
+
+  while (buying) {
+    buying = false;
+
+    for (const p of purchases) {
+      const price = p.lastPrice;
+      if (!price || price <= 0) continue;
+
+      // Se posso permettermi 1 quota, comprala
+      if (remaining >= price) {
+        p.integerQty += 1;
+        p.integerValue += price;
+        remaining -= price;
+        buying = true; // Continuiamo il ciclo finché compriamo qualcosa
+      }
     }
+  }
 
-    // quantità teorica basata sul budget dell'asset
-    let maxQty = Math.floor(x.monthlyBuyEUR / price);
+  // Ripristina l'ordine originale delle azioni
+  const result = purchases.sort((a, b) => a.orderIndex - b.orderIndex);
 
-    // limita al budget residuo totale
-    let affordableQty = Math.min(maxQty, Math.floor(remaining / price));
-
-    // sicurezza extra: assicurati che il costo non superi il residuo
-    while (affordableQty > 0 && affordableQty * price > remaining + 1e-6) {
-      affordableQty -= 1;
-    }
-
-    let value = affordableQty * price;
-    remaining -= value;
-
-    return {
-      ...x,
-      integerQty: affordableQty,
-      integerValue: value
-    };
-  });
+  return result;
 }
+
 
 
 
@@ -713,6 +721,10 @@ const allocationData = [
 }, [assets, totals.totalValue]);
 
 
+  rebalance.actions = rebalance.actions.map((x, i) => ({
+  ...x,
+  orderIndex: i
+}));
   const integerActions = computeIntegerPurchases(rebalance.actions, MONTHLY_BUDGET);
 
 

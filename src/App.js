@@ -263,8 +263,6 @@ export default function PortfolioDashboard() {
   const MONTHLY_BUDGET = 500; // € da investire ogni mese
   const totalCash = 10600; // esempio, la liquidità totale
 
-  const integerActions = computeIntegerPurchases(rebalance.actions, MONTHLY_BUDGET);
-
 
   const [history, setHistory] = useState(() => {
     const fromLS = localStorage.getItem(LS_HISTORY);
@@ -707,6 +705,10 @@ const allocationData = [
 
   return { actions: actionsWithPlan, diffSummary, monthlyBudget: MONTHLY_BUDGET };
 }, [assets, totals.totalValue]);
+
+
+  const integerActions = computeIntegerPurchases(rebalance.actions, MONTHLY_BUDGET);
+
 
 
   // --- Charts data ---

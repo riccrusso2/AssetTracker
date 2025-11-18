@@ -80,6 +80,71 @@ function round2(n) {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
+// Input: rows con campi { name, lastPrice, deltaValue, monthlyBuyEUR, ... }
+// Output: { rows: [...], totalInvested, leftover, overrunScenarios: [...] }
+function toIntegerPlan(rows, MONTHLY_BUDGET) {
+  const priced = rows.filter(r => (r.lastPrice ?? 0) > 0);
+
+  // Base: floor delle quantità frazionarie
+  const base = priced.map(r => {
+    const desiredQty = (r.monthlyBuyEUR ?? 0) / r.lastPrice;
+    const intQty = Math.max(0, Math.floor(desiredQty));
+    const cost = intQty * r.lastPrice;
+    const remainingShortfall = Math.max(0, (r.deltaValue ?? 0) - cost);
+    const utility = r.lastPrice > 0 ? (remainingShortfall / r.lastPrice) : 0;
+    return { ...r, desiredQty, intQty, cost, remainingShortfall, utility };
+  });
+
+  let totalCost = base.reduce((s, r) => s + r.cost, 0);
+  let leftover = Math.max(0, MONTHLY_BUDGET - totalCost);
+
+  // Greedy: usa il residuo per aggiungere quote intere dove l'underweight per euro è più alto
+  // Rompe i pareggi privilegiando prezzo minore (più probabile che stia nel residuo)
+  while (true) {
+    let bestIdx = -1;
+    let bestScore = -Infinity;
+
+    for (let i = 0; i < base.length; i++) {
+      const r = base[i];
+      if (r.lastPrice <= leftover) {
+        const score = r.utility + 1e-9 * (1 / r.lastPrice); // tie-break su prezzo
+        if (score > bestScore) {
+          bestScore = score;
+          bestIdx = i;
+        }
+      }
+    }
+    if (bestIdx === -1) break;
+
+    const r = base[bestIdx];
+    r.intQty += 1;
+    r.cost += r.lastPrice;
+    r.remainingShortfall = Math.max(0, r.remainingShortfall - r.lastPrice);
+    r.utility = r.lastPrice > 0 ? (r.remainingShortfall / r.lastPrice) : 0;
+    leftover -= r.lastPrice;
+    totalCost += r.lastPrice;
+  }
+
+  // Scenari: quanto sforo se aggiungo 1 quota in più a ciascun ETF rispetto al piano intero
+  const overrunScenarios = base.map(r => {
+    const over = Math.max(0, (totalCost + r.lastPrice) - MONTHLY_BUDGET);
+    return {
+      name: r.name,
+      price: r.lastPrice,
+      overrunEUR: over,
+    };
+  }).filter(s => s.overrunEUR > 0)
+    .sort((a, b) => a.overrunEUR - b.overrunEUR); // prima gli "almost"
+
+  return {
+    rows: base,
+    totalInvested: totalCost,
+    leftover,
+    overrunScenarios,
+  };
+}
+
+
 
 
 
@@ -703,6 +768,11 @@ const allocationData = [
       })),
     [history]
   );
+  const integerPlan = useMemo(() => {
+  // 'plan' è l'array esistente che alimenta la tabella DCA:
+  // [{ name, lastPrice, deltaValue, monthlyBuyEUR, currentWeight, targetWeight, ... }, ...]
+  return toIntegerPlan(plan, MONTHLY_BUDGET);
+}, [plan, MONTHLY_BUDGET])
 
   // Mappa dei nomi completi agli acronimi
   const acronyms = {
@@ -1086,39 +1156,33 @@ const allocationData = [
   Budget mensile disponibile: <span className="font-semibold">{formatCurrency(MONTHLY_BUDGET)}</span>
 </p>
         <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead>
-              <tr className="text-sm text-gray-500 border-b">
-                <th className="py-2">Asset</th>
-                <th>Attuale %</th>
-                <th>Target % (normalizzato)</th>
-                <th>Delta valore</th>
-                <th>Quantità stimata</th>
-                <th className="text-right">Acquisto mese</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rebalance.actions.map((x) => (
-                <tr key={x.id} className="border-b">
-                  <td className="py-2">{x.name}</td>
-                  <td>{x.currentWeight.toFixed(2)}%</td>
-                  <td>{x.targetWeight.toFixed(2)}%</td>
-                  <td
-                    className={
-                      x.deltaValue >= 0 ? "text-green-600" : "text-red-600"
-                    }
-                  >
-                    {formatCurrency(x.deltaValue)}
-                  </td>
-                  <td>{x.qty.toFixed(4)}</td>
-                  <td className="text-right text-green-600">
-                    {formatCurrency(x.monthlyBuyEUR)}
-                  </td>
-
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <table className="min-w-full">
+  <caption>Piano DCA mensile (quote intere)</caption>
+  <thead>
+    <tr>
+      <th>Asset</th>
+      <th>Attuale %</th>
+      <th>Target % (norm.)</th>
+      <th>Delta valore</th>
+      <th>Quote (intere)</th>
+      <th>Costo mese</th>
+    </tr>
+  </thead>
+  <tbody>
+    {integerPlan.rows.map(x => (
+      <tr key={x.name}>
+        <td>{x.name}</td>
+        <td>{x.currentWeight.toFixed(2)}%</td>
+        <td>{x.targetWeight.toFixed(2)}%</td>
+        <td className={x.deltaValue >= 0 ? "text-green-600" : "text-red-600"}>
+          {formatCurrency(x.deltaValue)}
+        </td>
+        <td>{x.intQty}</td>
+        <td>{formatCurrency(x.cost)}</td>
+      </tr>
+    ))}
+  </tbody>
+</table>
         </div>
         <p className="text-xs text-gray-500 mt-2">
           Nota: il target % viene normalizzato per sommare a 100%. Le quantità
@@ -1126,6 +1190,38 @@ const allocationData = [
           slippage.
         </p>
       </section>
+
+            <section className="mt-4 space-y-2">
+  <div>Totale investito questo mese: {formatCurrency(integerPlan.totalInvested)}</div>
+  <div>Budget residuo: {formatCurrency(integerPlan.leftover)}</div>
+
+  {integerPlan.overrunScenarios.length > 0 && (
+    <table className="min-w-full mt-2">
+      <caption>Scenari +1 quota (sforamento)</caption>
+      <thead>
+        <tr>
+          <th>Asset</th>
+          <th>Prezzo quota</th>
+          <th>Sforamento se +1</th>
+        </tr>
+      </thead>
+      <tbody>
+        {integerPlan.overrunScenarios.map(s => (
+          <tr key={s.name}>
+            <td>{s.name}</td>
+            <td>{formatCurrency(s.price)}</td>
+            <td>{formatCurrency(s.overrunEUR)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )}
+  <p className="text-sm text-neutral-500">
+    Nota: totale investito può essere inferiore al budget se il residuo non basta per una quota intera; gli scenari mostrano di quanto si sforerebbe aggiungendo una singola quota.
+  </p>
+</section>
+
     </div>
+
   );
 }

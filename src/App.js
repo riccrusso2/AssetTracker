@@ -1191,35 +1191,6 @@ const allocationData = [
         </p>
       </section>
 
-            <section className="mt-4 space-y-2">
-  <div>Totale investito questo mese: {formatCurrency(integerPlan.totalInvested)}</div>
-  <div>Budget residuo: {formatCurrency(integerPlan.leftover)}</div>
-
-  {integerPlan.overrunScenarios.length > 0 && (
-    <table className="min-w-full mt-2">
-      <caption>Scenari +1 quota (sforamento)</caption>
-      <thead>
-        <tr>
-          <th>Asset</th>
-          <th>Prezzo quota</th>
-          <th>Sforamento se +1</th>
-        </tr>
-      </thead>
-      <tbody>
-        {integerPlan.overrunScenarios.map(s => (
-          <tr key={s.name}>
-            <td>{s.name}</td>
-            <td>{formatCurrency(s.price)}</td>
-            <td>{formatCurrency(s.overrunEUR)}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  )}
-  <p className="text-sm text-neutral-500">
-    Nota: totale investito può essere inferiore al budget se il residuo non basta per una quota intera; gli scenari mostrano di quanto si sforerebbe aggiungendo una singola quota.
-  </p>
-</section>
 
     </div>
 

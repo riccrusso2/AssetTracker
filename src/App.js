@@ -191,9 +191,9 @@ export default function PortfolioDashboard() {
         id: "quantum",
         name: "VanEck Quantum Computing UCITS ETF A",
         identifier: "IE0007Y8Y157",
-        quantity: 14.649635,
+        quantity: 15.251524,
         currency: "",
-        costBasis: 20.96,
+        costBasis: 20.98,
         targetWeight: 1,
         lastPrice: null,
         lastUpdated: null,
@@ -231,8 +231,8 @@ export default function PortfolioDashboard() {
         ];
   });
 
-  const MONTHLY_BUDGET = 750; // € da investire ogni mese
-  const totalCash = 10600; // esempio, la liquidità totale
+  const MONTHLY_BUDGET = 1000; // € da investire ogni mese
+  const totalCash = 11000; // esempio, la liquidità totale
 
   const [history, setHistory] = useState(() => {
     const fromLS = localStorage.getItem(LS_HISTORY);

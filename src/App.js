@@ -179,9 +179,9 @@ export default function PortfolioDashboard() {
         name: "Bitcoin",
         identifier: "BTC", // non ha ISIN
         ticker: "BTC", // useremo questo per fetch separato
-        quantity: 0.007249, // esempio, cambia con il tuo
+        quantity: 0.00787, // esempio, cambia con il tuo
         currency: "",
-        costBasis: 98544.57 , // prezzo medio di carico
+        costBasis: 96857.87 , // prezzo medio di carico
         targetWeight: 4, // obiettivo percentuale
         lastPrice: null,
         lastUpdated: null,

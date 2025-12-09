@@ -248,7 +248,8 @@ export default function PortfolioDashboard() {
     { id: cryptoRandomId(), name: "Yasu", invested: 300, fee: 24 },
     { id: cryptoRandomId(), name: "Reental", invested: 300, fee: 24 },
     { id: cryptoRandomId(), name: "Fintower", invested: 300, fee: 24 },
-    { id: cryptoRandomId(), name: "Epic Games", invested: 300, fee: 24 }
+    { id: cryptoRandomId(), name: "Epic Games", invested: 300, fee: 24 },
+    { id: cryptoRandomId(), name: "Mega", invested: 300, fee: 24 }
   ];
 });
     // [QUI puoi copiare le sezioni "rebalance", "pieData", "barData", "lineData" e JSX dal tuo file attuale]

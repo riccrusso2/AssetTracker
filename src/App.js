@@ -166,9 +166,9 @@ export default function PortfolioDashboard() {
         id: "bitcoin",
         name: "Bitcoin",
         identifier: "XS2940466316", // non ha ISIN
-        quantity: 0.00787, // esempio, cambia con il tuo
+        quantity: 87, // esempio, cambia con il tuo
         currency: "",
-        costBasis: 96857.87 , // prezzo medio di carico
+        costBasis: 7.44 , // prezzo medio di carico
         targetWeight: 4, // obiettivo percentuale
         lastPrice: null,
         lastUpdated: null,

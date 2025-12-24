@@ -165,8 +165,7 @@ export default function PortfolioDashboard() {
       {
         id: "bitcoin",
         name: "Bitcoin",
-        identifier: "BTC", // non ha ISIN
-        ticker: "BTC", // useremo questo per fetch separato
+        identifier: "XS2940466316", // non ha ISIN
         quantity: 0.00787, // esempio, cambia con il tuo
         currency: "",
         costBasis: 96857.87 , // prezzo medio di carico
@@ -388,7 +387,7 @@ const contributions = assets.map((a) => {
   // asset aggiornato solo manualmente
   return { price: asset.lastPrice, currency: "EUR", lastUpdated: Date.now() };
 }
-      if (asset.ticker === "BTC") {
+      if (asset.ticker === "BTCC") {
         // fetch da un API cripto, esempio CoinGecko
         const res = await fetch(
           `https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=eur`

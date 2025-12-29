@@ -168,7 +168,7 @@ export default function PortfolioDashboard() {
         identifier: "XS2940466316", // non ha ISIN
         quantity: 87, // esempio, cambia con il tuo
         currency: "",
-        costBasis: 7.44 , // prezzo medio di carico
+        costBasis: 7.5936 , // prezzo medio di carico
         targetWeight: 4, // obiettivo percentuale
         lastPrice: null,
         lastUpdated: null,

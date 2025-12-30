@@ -219,7 +219,7 @@ export default function PortfolioDashboard() {
   });
 
   const MONTHLY_BUDGET = 500; // € da investire ogni mese
-  const totalCash = 11000; // esempio, la liquidità totale
+  const totalCash = 10700; // esempio, la liquidità totale
 
   const [history, setHistory] = useState(() => {
     const fromLS = localStorage.getItem(LS_HISTORY);

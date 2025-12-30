@@ -105,7 +105,7 @@ export default function PortfolioDashboard() {
         id: "ftseallworld",
         name: "FTSE All-World USD ",
         identifier: "IE00BK5BQT80",
-        quantity: 94.164474,
+        quantity: 96.164474,
         currency: "",
         costBasis: 135.73,
         targetWeight: 65,

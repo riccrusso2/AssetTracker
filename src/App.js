@@ -107,7 +107,7 @@ export default function PortfolioDashboard() {
         identifier: "IE00BK5BQT80",
         quantity: 94.164474,
         currency: "",
-        costBasis: 135.54,
+        costBasis: 135.73,
         targetWeight: 65,
         lastPrice: null,
         lastUpdated: null,
@@ -117,9 +117,9 @@ export default function PortfolioDashboard() {
         id: "worldquality",
         name: "iShares Edge MSCI World Quality Factor UCITS ETF (Acc)",
         identifier: "IE00BP3QZ601",
-        quantity: 12,
+        quantity: 22,
         currency: "",
-        costBasis: 67.65,
+        costBasis: 67.88818,
         targetWeight: 8,
         lastPrice: null,
         lastUpdated: null,
@@ -129,9 +129,9 @@ export default function PortfolioDashboard() {
         id: "worldmomentum",
         name: "iShares Edge MSCI World Momentum Factor UCITS ETF (Acc)",
         identifier: "IE00BP3QZ825",
-        quantity: 7,
+        quantity: 14,
         currency: "",
-        costBasis: 83.18,
+        costBasis: 83.075,
         targetWeight: 6,
         lastPrice: null,
         lastUpdated: null,
@@ -141,9 +141,9 @@ export default function PortfolioDashboard() {
         id: "worldvalue",
         name: "iShares Edge MSCI World Value Factor UCITS ETF (Acc)",
         identifier: "IE00BP3QZB59",
-        quantity: 12,
+        quantity: 23,
         currency: "",
-        costBasis: 49.19,
+        costBasis: 50.07434,
         targetWeight: 6,
         lastPrice: null,
         lastUpdated: null,
@@ -168,7 +168,7 @@ export default function PortfolioDashboard() {
         identifier: "XS2940466316", // non ha ISIN
         quantity: 87, // esempio, cambia con il tuo
         currency: "",
-        costBasis: 7.5936 , // prezzo medio di carico
+        costBasis: 7.6274 , // prezzo medio di carico
         targetWeight: 4, // obiettivo percentuale
         lastPrice: null,
         lastUpdated: null,
@@ -218,7 +218,7 @@ export default function PortfolioDashboard() {
         ];
   });
 
-  const MONTHLY_BUDGET = 2350; // € da investire ogni mese
+  const MONTHLY_BUDGET = 500; // € da investire ogni mese
   const totalCash = 11000; // esempio, la liquidità totale
 
   const [history, setHistory] = useState(() => {

@@ -153,9 +153,9 @@ export default function PortfolioDashboard() {
         id: "gold",
         name: "Physical Gold USD (Acc)",
         identifier: "IE00B4ND3602",
-        quantity:26.8364,
+        quantity:27.524299,
         currency: "",
-        costBasis: 58.28,
+        costBasis: 58.64,
         targetWeight: 10,
         lastPrice: null,
         lastUpdated: null,
@@ -178,9 +178,9 @@ export default function PortfolioDashboard() {
         id: "quantum",
         name: "VanEck Quantum Computing UCITS ETF A",
         identifier: "IE0007Y8Y157",
-        quantity: 15.251524,
+        quantity: 15.939786,
         currency: "",
-        costBasis: 20.98,
+        costBasis: 21.00,
         targetWeight: 1,
         lastPrice: null,
         lastUpdated: null,
@@ -219,7 +219,7 @@ export default function PortfolioDashboard() {
   });
 
   const MONTHLY_BUDGET = 500; // € da investire ogni mese
-  const totalCash = 10700; // esempio, la liquidità totale
+  const totalCash = 10800; // esempio, la liquidità totale
 
   const [history, setHistory] = useState(() => {
     const fromLS = localStorage.getItem(LS_HISTORY);

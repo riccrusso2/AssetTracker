@@ -1,34 +1,55 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+// app.js
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   PieChart,
   Pie,
   Cell,
   Tooltip as ReTooltip,
   ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  LineChart,
+  Line,
+  Legend,
+  LabelList,
 } from "recharts";
 import {
   RefreshCw,
+  Plus,
   TrendingUp,
   TrendingDown,
   PieChart as PieChartIcon,
+  BarChart2,
+  LineChart as LineChartIcon,
   Target,
   Info,
+  Trash2,
 } from "lucide-react";
+import "./styles.css";
 
-// ============================================================================
-// CONSTANTS & CONFIGURATION
-// ============================================================================
-
-const LS_ASSETS = "pf.assets.v4";
-const LS_HISTORY = "pf.history.v4";
-const LS_STARTUP = "pf.startup.v1";
-const LS_PRIVATE_EQUITY = "pf.privateequity.v1";
+// ==================== CONSTANTS ====================
+const STORAGE_KEYS = {
+  ASSETS: "pf.assets.v4",
+  HISTORY: "pf.history.v4",
+  STARTUP: "pf.startup.v1",
+  PRIVATE_EQUITY: "pf.privateequity.v1",
+};
 
 const MONTHLY_BUDGET = 500;
 const TOTAL_CASH = 10800;
-const REFRESH_INTERVAL = 900000; // 15 min
+const AUTO_REFRESH_INTERVAL = 900000; // 15 minutes
 
-const COLORS = [
+const CHART_COLORS = [
   "#2563eb",
   "#10b981",
   "#f59e0b",
@@ -39,103 +60,148 @@ const COLORS = [
   "#22c55e",
 ];
 
-// ============================================================================
-// INITIAL DATA
-// ============================================================================
+// ==================== UTILITY FUNCTIONS ====================
+const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
 
-const INITIAL_ASSETS = [
+const formatCurrency = (n, currency = "EUR") => {
+  if (n == null || Number.isNaN(n)) return "—";
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency,
+      maximumFractionDigits: 2,
+    }).format(n);
+  } catch {
+    return n.toFixed(2);
+  }
+};
+
+const isMaybeISIN = (v) => /^[A-Z0-9]{12}$/i.test((v || "").trim());
+
+const cryptoRandomId = () => Math.random().toString(36).slice(2, 10);
+
+const getFromLocalStorage = (key, defaultValue) => {
+  try {
+    const item = localStorage.getItem(key);
+    if (item) {
+      const parsed = JSON.parse(item);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (e) {
+    console.error(`Error parsing localStorage for ${key}:`, e);
+  }
+  return defaultValue;
+};
+
+const saveToLocalStorage = (key, value) => {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (e) {
+    console.error(`Error saving to localStorage for ${key}:`, e);
+  }
+};
+
+// ==================== INITIAL DATA ====================
+const getInitialAssets = () => [
   {
     id: "ftseallworld",
     name: "FTSE All-World USD",
     identifier: "IE00BK5BQT80",
     quantity: 96.164474,
+    currency: "",
     costBasis: 135.73,
     targetWeight: 65,
-    assetClass: "ETF",
     lastPrice: null,
     lastUpdated: null,
+    assetClass: "ETF",
   },
   {
     id: "worldquality",
     name: "iShares Edge MSCI World Quality Factor UCITS ETF (Acc)",
     identifier: "IE00BP3QZ601",
     quantity: 22,
+    currency: "",
     costBasis: 67.88818,
     targetWeight: 7,
-    assetClass: "ETF",
     lastPrice: null,
     lastUpdated: null,
+    assetClass: "ETF",
   },
   {
     id: "worldmomentum",
     name: "iShares Edge MSCI World Momentum Factor UCITS ETF (Acc)",
     identifier: "IE00BP3QZ825",
     quantity: 14,
+    currency: "",
     costBasis: 83.075,
     targetWeight: 6,
-    assetClass: "ETF",
     lastPrice: null,
     lastUpdated: null,
+    assetClass: "ETF",
   },
   {
     id: "worldvalue",
     name: "iShares Edge MSCI World Value Factor UCITS ETF (Acc)",
     identifier: "IE00BP3QZB59",
     quantity: 23,
+    currency: "",
     costBasis: 50.07434,
     targetWeight: 7,
-    assetClass: "ETF",
     lastPrice: null,
     lastUpdated: null,
+    assetClass: "ETF",
   },
   {
     id: "gold",
     name: "Physical Gold USD (Acc)",
     identifier: "IE00B4ND3602",
     quantity: 27.524299,
+    currency: "",
     costBasis: 58.64,
     targetWeight: 10,
-    assetClass: "Commodity",
     lastPrice: null,
     lastUpdated: null,
+    assetClass: "Commodity",
   },
   {
     id: "bitcoin",
     name: "Bitcoin",
     identifier: "XS2940466316",
     quantity: 87,
+    currency: "",
     costBasis: 7.6274,
     targetWeight: 4,
-    assetClass: "Crypto",
     lastPrice: null,
     lastUpdated: null,
+    assetClass: "Crypto",
   },
   {
     id: "quantum",
     name: "VanEck Quantum Computing UCITS ETF A",
     identifier: "IE0007Y8Y157",
     quantity: 15.939786,
+    currency: "",
     costBasis: 21.0,
     targetWeight: 1,
-    assetClass: "ETF",
     lastPrice: null,
     lastUpdated: null,
+    assetClass: "ETF",
   },
 ];
 
-const INITIAL_STARTUP = [
-  { id: "s1", name: "Rhyde 2.0", invested: 248, fee: 19.84 },
-  { id: "s2", name: "Hymalaia", invested: 300, fee: 24 },
-  { id: "s3", name: "Favikon", invested: 300, fee: 24 },
-  { id: "s4", name: "Orbital Paradigm", invested: 300, fee: 24 },
-  { id: "s5", name: "Yasu", invested: 300, fee: 24 },
-  { id: "s6", name: "Reental", invested: 300, fee: 24 },
-  { id: "s7", name: "Fintower", invested: 300, fee: 24 },
-  { id: "s8", name: "Epic Games", invested: 300, fee: 24 },
-  { id: "s9", name: "Mega", invested: 300, fee: 24 },
+const getInitialStartups = () => [
+  { id: cryptoRandomId(), name: "Rhyde 2.0", invested: 248, fee: 19.84 },
+  { id: cryptoRandomId(), name: "Hymalaia", invested: 300, fee: 24 },
+  { id: cryptoRandomId(), name: "Favikon", invested: 300, fee: 24 },
+  { id: cryptoRandomId(), name: "Orbital Paradigm", invested: 300, fee: 24 },
+  { id: cryptoRandomId(), name: "Yasu", invested: 300, fee: 24 },
+  { id: cryptoRandomId(), name: "Reental", invested: 300, fee: 24 },
+  { id: cryptoRandomId(), name: "Fintower", invested: 300, fee: 24 },
+  { id: cryptoRandomId(), name: "Epic Games", invested: 300, fee: 24 },
+  { id: cryptoRandomId(), name: "Mega", invested: 300, fee: 24 },
 ];
 
-const INITIAL_PRIVATE_EQUITY = [
+const getInitialPrivateEquity = () => [
   {
     id: "eqt-nexus",
     name: "EQT Nexus ELTIF",
@@ -158,53 +224,8 @@ const INITIAL_PRIVATE_EQUITY = [
   },
 ];
 
-// ============================================================================
-// UTILITY FUNCTIONS
-// ============================================================================
-
-function cryptoRandomId() {
-  return Math.random().toString(36).slice(2, 10);
-}
-
-function round2(n) {
-  return Math.round((n + Number.EPSILON) * 100) / 100;
-}
-
-function formatCurrency(n, currency = "EUR") {
-  if (n == null || Number.isNaN(n)) return "—";
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency,
-      maximumFractionDigits: 2,
-    }).format(n);
-  } catch {
-    return n.toFixed(2);
-  }
-}
-
-function isMaybeISIN(v) {
-  return /^[A-Z0-9]{12}$/i.test((v || "").trim());
-}
-
-function loadFromLS(key, fallback) {
-  try {
-    const data = localStorage.getItem(key);
-    if (data) {
-      const parsed = JSON.parse(data);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-    }
-  } catch (e) {
-    console.error(`Error loading ${key}:`, e);
-  }
-  return fallback;
-}
-
-// ============================================================================
-// COMPONENTS
-// ============================================================================
-
-function PerfBadge({ value }) {
+// ==================== COMPONENTS ====================
+const PerfBadge = ({ value }) => {
   const positive = value >= 0;
   return (
     <span
@@ -215,257 +236,36 @@ function PerfBadge({ value }) {
       {value.toFixed(2)}%
     </span>
   );
-}
+};
 
-// ============================================================================
-// MAIN COMPONENT
-// ============================================================================
-
-export default function PortfolioDashboard() {
-  // --------------------------------------------------------------------------
-  // STATE
-  // --------------------------------------------------------------------------
-
-  const [assets, setAssets] = useState(() => loadFromLS(LS_ASSETS, INITIAL_ASSETS));
-  const [startup, setStartup] = useState(() => loadFromLS(LS_STARTUP, INITIAL_STARTUP));
-  const [privateEquity, setPrivateEquity] = useState(() =>
-    loadFromLS(LS_PRIVATE_EQUITY, INITIAL_PRIVATE_EQUITY)
+// ==================== CUSTOM HOOKS ====================
+const useLocalStorage = (key, initialValue) => {
+  const [value, setValue] = useState(() =>
+    getFromLocalStorage(key, initialValue)
   );
-  const [history, setHistory] = useState(() => loadFromLS(LS_HISTORY, []));
+
+  useEffect(() => {
+    saveToLocalStorage(key, value);
+  }, [key, value]);
+
+  return [value, setValue];
+};
+
+const usePriceFetcher = () => {
   const [loadingIds, setLoadingIds] = useState({});
   const [error, setError] = useState(null);
 
-  const intervalRef = useRef(null);
-  const assetsRef = useRef(assets);
-
-  // --------------------------------------------------------------------------
-  // DERIVED VALUES
-  // --------------------------------------------------------------------------
-
-  const totalEquityValue = useMemo(
-    () => assets.reduce((acc, a) => acc + (a.lastPrice ? a.lastPrice * (a.quantity || 0) : 0), 0),
-    [assets]
-  );
-
-  const totalPEValue = useMemo(
-    () => startup.reduce((acc, p) => acc + (p.invested || 0), 0),
-    [startup]
-  );
-
-  const totalPrivateEquityValue = useMemo(
-    () => privateEquity.reduce((acc, f) => acc + (f.lastPrice || 0), 0),
-    [privateEquity]
-  );
-
-  const totals = useMemo(() => {
-    let totalValue = 0;
-    let totalCost = 0;
-
-    assets.forEach((a) => {
-      if (a.lastPrice && a.quantity) totalValue += a.lastPrice * a.quantity;
-      if (a.costBasis && a.quantity) totalCost += a.costBasis * a.quantity;
-    });
-
-    const totalReturn = totalCost > 0 ? (totalValue - totalCost) / totalCost : 0;
-
-    const perfArr = assets
-      .filter((a) => a.lastPrice && a.costBasis)
-      .map((a) => ({
-        id: a.id,
-        name: a.name,
-        perf: (a.lastPrice - a.costBasis) / a.costBasis,
-      }));
-
-    let best = null;
-    let worst = null;
-
-    if (perfArr.length) {
-      best = perfArr.reduce((p, c) => (c.perf > p.perf ? c : p));
-      worst = perfArr.reduce((p, c) => (c.perf < p.perf ? c : p));
-    }
-
-    return { totalValue, totalCost, totalReturn, best, worst };
-  }, [assets]);
-
-  const weights = useMemo(() => {
-    const tv = totals.totalValue || 0;
-    return assets.map((a) => {
-      const value = a.lastPrice ? a.lastPrice * (a.quantity || 0) : 0;
-      const weight = tv > 0 ? (value / tv) * 100 : 0;
-      return {
-        id: a.id,
-        name: a.name,
-        value,
-        weight,
-        target: a.targetWeight || 0,
-      };
-    });
-  }, [assets, totals.totalValue]);
-
-  const classDistribution = useMemo(() => {
-    const map = {};
-    assets.forEach((a) => {
-      const value = a.lastPrice ? a.lastPrice * (a.quantity || 0) : 0;
-      if (value > 0) {
-        map[a.assetClass] = (map[a.assetClass] || 0) + value;
-      }
-    });
-    return Object.entries(map).map(([name, value]) => ({
-      name,
-      value: round2(value),
-    }));
-  }, [assets]);
-
-  const classWithStartup = useMemo(() => {
-    const base = [...classDistribution];
-    if (totalPEValue > 0) base.push({ name: "Startup", value: round2(totalPEValue) });
-    if (totalPrivateEquityValue > 0)
-      base.push({ name: "Private Equity", value: round2(totalPrivateEquityValue) });
-    return base;
-  }, [classDistribution, totalPEValue, totalPrivateEquityValue]);
-
-  const classWithStartupAndCash = useMemo(() => {
-    const base = [...classWithStartup];
-    if (TOTAL_CASH > 0) base.push({ name: "Liquidità", value: round2(TOTAL_CASH) });
-    return base;
-  }, [classWithStartup]);
-
-  const rebalance = useMemo(() => {
-    const tv = totals.totalValue || 0;
-    if (tv <= 0)
-      return { actions: [], diffSummary: [], monthlyBudget: MONTHLY_BUDGET };
-
-    const sumTarget = assets.reduce((acc, a) => acc + (a.targetWeight || 0), 0) || 0;
-    const normFactor = sumTarget > 0 ? 100 / sumTarget : 1;
-
-    const actions = assets.map((a) => {
-      const currentValue = (a.lastPrice || 0) * (a.quantity || 0);
-      const currentWeight = tv > 0 ? (currentValue / tv) * 100 : 0;
-      const targetW = (a.targetWeight || 0) * normFactor;
-      const targetValue = (targetW / 100) * tv;
-      const deltaValue = targetValue - currentValue;
-      const qty = a.lastPrice ? deltaValue / a.lastPrice : 0;
-      return {
-        id: a.id,
-        name: a.name,
-        identifier: a.identifier,
-        currentWeight,
-        targetWeight: targetW,
-        deltaValue,
-        qty,
-        lastPrice: a.lastPrice,
-      };
-    });
-
-    const baseAlloc = assets.map(
-      (a) => ((a.targetWeight || 0) * normFactor / 100) * MONTHLY_BUDGET
-    );
-    const deltas = actions.map((x) => x.deltaValue);
-    const underIdx = deltas.map((d, i) => (d > 0 ? i : -1)).filter((i) => i !== -1);
-
-    let buy = baseAlloc.slice();
-
-    if (underIdx.length > 0) {
-      let freed = 0;
-      buy = buy.map((amt, i) => {
-        if (deltas[i] <= 0) {
-          freed += amt;
-          return 0;
-        }
-        return amt;
-      });
-
-      const sumPos = underIdx.reduce((acc, i) => acc + deltas[i], 0);
-      if (sumPos > 0) {
-        buy = buy.map((amt, i) =>
-          deltas[i] > 0 ? amt + (freed * (deltas[i] / sumPos)) : amt
-        );
-      }
-
-      let leftover = 0;
-      buy = buy.map((amt, i) => {
-        if (deltas[i] > 0 && amt > deltas[i]) {
-          leftover += amt - deltas[i];
-          return deltas[i];
-        }
-        return amt;
-      });
-
-      let guard = 0;
-      while (leftover > 0.01 && guard < 8) {
-        guard++;
-        const room = buy.map((amt, i) =>
-          deltas[i] > 0 ? Math.max(0, deltas[i] - amt) : 0
-        );
-        const roomTotal = room.reduce((a, b) => a + b, 0);
-        if (roomTotal <= 0) break;
-        buy = buy.map((amt, i) =>
-          deltas[i] > 0 ? Math.min(deltas[i], amt + (leftover * (room[i] / roomTotal))) : amt
-        );
-        const spent = buy.reduce((acc, amt, i) => acc + (deltas[i] > 0 ? amt : 0), 0);
-        leftover = Math.max(0, MONTHLY_BUDGET - spent);
-      }
-
-      const sumBuy = buy.reduce((a, b) => a + b, 0);
-      if (MONTHLY_BUDGET - sumBuy > 0.01) {
-        const baseTotal = baseAlloc.reduce((a, b) => a + b, 0) || 1;
-        buy = buy.map((amt, i) => amt + ((MONTHLY_BUDGET - sumBuy) * (baseAlloc[i] / baseTotal)));
-      }
-    } else {
-      buy = baseAlloc;
-    }
-
-    const actionsWithPlan = actions.map((x, i) => {
-      const monthlyBuyEUR = round2(Math.max(0, buy[i] || 0));
-      const monthlyQty = x.lastPrice ? round2(monthlyBuyEUR / x.lastPrice) : null;
-      return { ...x, monthlyBuyEUR, monthlyQty };
-    });
-
-    const diffSummary = actionsWithPlan.map((x) => ({
-      name: x.name,
-      deltaValue: x.deltaValue,
-      qty: x.qty,
-      monthlyBuyEUR: x.monthlyBuyEUR,
-    }));
-
-    return { actions: actionsWithPlan, diffSummary, monthlyBudget: MONTHLY_BUDGET };
-  }, [assets, totals.totalValue]);
-
-  // --------------------------------------------------------------------------
-  // EFFECTS
-  // --------------------------------------------------------------------------
-
-  useEffect(() => {
-    assetsRef.current = assets;
-  }, [assets]);
-
-  useEffect(() => {
-    localStorage.setItem(LS_ASSETS, JSON.stringify(assets));
-  }, [assets]);
-
-  useEffect(() => {
-    localStorage.setItem(LS_HISTORY, JSON.stringify(history));
-  }, [history]);
-
-  useEffect(() => {
-    localStorage.setItem(LS_STARTUP, JSON.stringify(startup));
-  }, [startup]);
-
-  useEffect(() => {
-    localStorage.setItem(LS_PRIVATE_EQUITY, JSON.stringify(privateEquity));
-  }, [privateEquity]);
-
-  // --------------------------------------------------------------------------
-  // API FUNCTIONS
-  // --------------------------------------------------------------------------
-
-  const fetchPriceForAsset = useCallback(async (asset) => {
+  const fetchPrice = useCallback(async (asset) => {
     setLoadingIds((s) => ({ ...s, [asset.id]: true }));
     setError(null);
 
     try {
       if (asset.manual) {
-        return { price: asset.lastPrice, currency: "EUR", lastUpdated: Date.now() };
+        return {
+          price: asset.lastPrice,
+          currency: "EUR",
+          lastUpdated: Date.now(),
+        };
       }
 
       if (asset.ticker === "BTCC") {
@@ -476,14 +276,14 @@ export default function PortfolioDashboard() {
         const data = await res.json();
         return {
           price: data.bitcoin.eur,
-          currency: "EUR",
+          currency: "",
           lastUpdated: Date.now(),
         };
       }
 
       const isin = asset.identifier?.trim();
       if (!isMaybeISIN(isin)) {
-        throw new Error(`Identificatore non valido (serve un ISIN): ${isin}`);
+        throw new Error(`Invalid identifier (ISIN required): ${isin}`);
       }
 
       const res = await fetch(`/api/quote?isin=${encodeURIComponent(isin)}`);
@@ -491,7 +291,7 @@ export default function PortfolioDashboard() {
       const data = await res.json();
 
       if (!data.latestQuote?.raw) {
-        throw new Error(`Nessun dato per ISIN ${isin}`);
+        throw new Error(`No data for ISIN ${isin}`);
       }
 
       return {
@@ -511,10 +311,262 @@ export default function PortfolioDashboard() {
     }
   }, []);
 
+  return { fetchPrice, loadingIds, error };
+};
+
+// ==================== CALCULATIONS ====================
+const calculateTotals = (assets) => {
+  let totalValue = 0;
+  let totalCost = 0;
+
+  assets.forEach((a) => {
+    if (a.lastPrice && a.quantity) {
+      totalValue += a.lastPrice * a.quantity;
+    }
+    if (a.costBasis && a.quantity) {
+      totalCost += a.costBasis * a.quantity;
+    }
+  });
+
+  const totalReturn = totalCost > 0 ? (totalValue - totalCost) / totalCost : 0;
+
+  const perfArr = assets
+    .filter((a) => a.lastPrice && a.costBasis)
+    .map((a) => ({
+      id: a.id,
+      name: a.name,
+      perf: (a.lastPrice - a.costBasis) / a.costBasis,
+    }));
+
+  let best = null;
+  let worst = null;
+  if (perfArr.length) {
+    best = perfArr.reduce((p, c) => (c.perf > p.perf ? c : p));
+    worst = perfArr.reduce((p, c) => (c.perf < p.perf ? c : p));
+  }
+
+  return { totalValue, totalCost, totalReturn, best, worst };
+};
+
+const calculateWeights = (assets, totalValue) => {
+  const tv = totalValue || 0;
+  return assets.map((a) => {
+    const value = a.lastPrice ? a.lastPrice * (a.quantity || 0) : 0;
+    const weight = tv > 0 ? (value / tv) * 100 : 0;
+    return {
+      id: a.id,
+      name: a.name,
+      value,
+      weight,
+      target: a.targetWeight || 0,
+    };
+  });
+};
+
+const calculateClassDistribution = (assets) => {
+  const map = {};
+  assets.forEach((a) => {
+    const value = a.lastPrice ? a.lastPrice * (a.quantity || 0) : 0;
+    if (value > 0) {
+      map[a.assetClass] = (map[a.assetClass] || 0) + value;
+    }
+  });
+  return Object.entries(map).map(([name, value]) => ({
+    name,
+    value: round2(value),
+  }));
+};
+
+const calculateRebalancing = (assets, totalValue, monthlyBudget) => {
+  const tv = totalValue || 0;
+  if (tv <= 0)
+    return { actions: [], diffSummary: [], monthlyBudget };
+
+  const sumTarget = assets.reduce((acc, a) => acc + (a.targetWeight || 0), 0) || 0;
+  const normFactor = sumTarget > 0 ? 100 / sumTarget : 1;
+
+  const actions = assets.map((a) => {
+    const currentValue = (a.lastPrice || 0) * (a.quantity || 0);
+    const currentWeight = tv > 0 ? (currentValue / tv) * 100 : 0;
+    const targetW = (a.targetWeight || 0) * normFactor;
+    const targetValue = (targetW / 100) * tv;
+    const deltaValue = targetValue - currentValue;
+    const qty = a.lastPrice ? deltaValue / a.lastPrice : 0;
+    return {
+      id: a.id,
+      name: a.name,
+      identifier: a.identifier,
+      currentWeight,
+      targetWeight: targetW,
+      deltaValue,
+      qty,
+      lastPrice: a.lastPrice,
+    };
+  });
+
+  const baseAlloc = assets.map(
+    (a) => (((a.targetWeight || 0) * normFactor) / 100) * monthlyBudget
+  );
+  const deltas = actions.map((x) => x.deltaValue);
+  const underIdx = deltas
+    .map((d, i) => (d > 0 ? i : -1))
+    .filter((i) => i !== -1);
+
+  let buy = baseAlloc.slice();
+
+  if (underIdx.length > 0) {
+    let freed = 0;
+    buy = buy.map((amt, i) => {
+      if (deltas[i] <= 0) {
+        freed += amt;
+        return 0;
+      }
+      return amt;
+    });
+
+    const sumPos = underIdx.reduce((acc, i) => acc + deltas[i], 0);
+    if (sumPos > 0) {
+      buy = buy.map((amt, i) =>
+        deltas[i] > 0 ? amt + (freed * deltas[i]) / sumPos : amt
+      );
+    }
+
+    let leftover = 0;
+    buy = buy.map((amt, i) => {
+      if (deltas[i] > 0 && amt > deltas[i]) {
+        leftover += amt - deltas[i];
+        return deltas[i];
+      }
+      return amt;
+    });
+
+    let guard = 0;
+    while (leftover > 0.01 && guard < 8) {
+      guard++;
+      const room = buy.map((amt, i) =>
+        deltas[i] > 0 ? Math.max(0, deltas[i] - amt) : 0
+      );
+      const roomTotal = room.reduce((a, b) => a + b, 0);
+      if (roomTotal <= 0) break;
+      buy = buy.map((amt, i) =>
+        deltas[i] > 0
+          ? Math.min(deltas[i], amt + (leftover * room[i]) / roomTotal)
+          : amt
+      );
+      const spent = buy.reduce(
+        (acc, amt, i) => acc + (deltas[i] > 0 ? amt : 0),
+        0
+      );
+      leftover = Math.max(0, monthlyBudget - spent);
+    }
+
+    const sumBuy = buy.reduce((a, b) => a + b, 0);
+    if (monthlyBudget - sumBuy > 0.01) {
+      const baseTotal = baseAlloc.reduce((a, b) => a + b, 0) || 1;
+      buy = buy.map(
+        (amt, i) => amt + ((monthlyBudget - sumBuy) * baseAlloc[i]) / baseTotal
+      );
+    }
+  }
+
+  const actionsWithPlan = actions.map((x, i) => {
+    const monthlyBuyEUR = round2(Math.max(0, buy[i] || 0));
+    const monthlyQty = x.lastPrice ? round2(monthlyBuyEUR / x.lastPrice) : null;
+    return { ...x, monthlyBuyEUR, monthlyQty };
+  });
+
+  const diffSummary = actionsWithPlan.map((x) => ({
+    name: x.name,
+    deltaValue: x.deltaValue,
+    qty: x.qty,
+    monthlyBuyEUR: x.monthlyBuyEUR,
+  }));
+
+  return { actions: actionsWithPlan, diffSummary, monthlyBudget };
+};
+
+// ==================== MAIN COMPONENT ====================
+export default function PortfolioDashboard() {
+  const [assets, setAssets] = useLocalStorage(
+    STORAGE_KEYS.ASSETS,
+    getInitialAssets()
+  );
+  const [privateEquity, setPrivateEquity] = useLocalStorage(
+    STORAGE_KEYS.PRIVATE_EQUITY,
+    getInitialPrivateEquity()
+  );
+  const [startup, setStartup] = useLocalStorage(
+    STORAGE_KEYS.STARTUP,
+    getInitialStartups()
+  );
+  const [history, setHistory] = useLocalStorage(STORAGE_KEYS.HISTORY, []);
+
+  const { fetchPrice, loadingIds, error } = usePriceFetcher();
+  const intervalRef = useRef(null);
+  const assetsRef = useRef(assets);
+
+  useEffect(() => {
+    assetsRef.current = assets;
+  }, [assets]);
+
+  const totals = useMemo(() => calculateTotals(assets), [assets]);
+  const weights = useMemo(
+    () => calculateWeights(assets, totals.totalValue),
+    [assets, totals.totalValue]
+  );
+
+  const totalEquityValue = useMemo(
+    () =>
+      assets.reduce(
+        (acc, a) => acc + (a.lastPrice ? a.lastPrice * (a.quantity || 0) : 0),
+        0
+      ),
+    [assets]
+  );
+
+  const totalPEValue = useMemo(
+    () => startup.reduce((acc, p) => acc + (p.invested || 0), 0),
+    [startup]
+  );
+
+  const totalPrivateEquityValue = useMemo(
+    () => privateEquity.reduce((acc, f) => acc + (f.lastPrice || 0), 0),
+    [privateEquity]
+  );
+
+  const classDistribution = useMemo(
+    () => calculateClassDistribution(assets),
+    [assets]
+  );
+
+  const classWithStartup = useMemo(() => {
+    const base = [...classDistribution];
+    if (totalPEValue > 0) {
+      base.push({ name: "Startup", value: round2(totalPEValue) });
+    }
+    if (totalPrivateEquityValue > 0) {
+      base.push({ name: "Private Equity", value: round2(totalPrivateEquityValue) });
+    }
+    return base;
+  }, [classDistribution, totalPEValue, totalPrivateEquityValue]);
+
+  const classWithStartupAndCash = useMemo(() => {
+    const base = [...classWithStartup];
+    if (TOTAL_CASH > 0) {
+      base.push({ name: "Liquidità", value: round2(TOTAL_CASH) });
+    }
+    return base;
+  }, [classWithStartup]);
+
+  const rebalance = useMemo(
+    () => calculateRebalancing(assets, totals.totalValue, MONTHLY_BUDGET),
+    [assets, totals.totalValue]
+  );
+
   const fetchAllPrices = useCallback(async () => {
     const updated = await Promise.all(
       (assetsRef.current || []).map(async (a) => {
-        const res = await fetchPriceForAsset(a);
+        const res = await fetchPrice(a);
         if (res.price !== null) {
           return {
             ...a,
@@ -535,28 +587,23 @@ export default function PortfolioDashboard() {
     setHistory((h) =>
       [...h, { t: new Date().toISOString(), v: round2(totalNow) }].slice(-500)
     );
-  }, [fetchPriceForAsset]);
+  }, [fetchPrice, setAssets, setHistory]);
 
   useEffect(() => {
     fetchAllPrices();
-    intervalRef.current = setInterval(fetchAllPrices, REFRESH_INTERVAL);
+    intervalRef.current = setInterval(fetchAllPrices, AUTO_REFRESH_INTERVAL);
     return () => clearInterval(intervalRef.current);
   }, [fetchAllPrices]);
 
-  // --------------------------------------------------------------------------
-  // RENDER
-  // --------------------------------------------------------------------------
-
   return (
     <div className="max-w-7xl mx-auto p-4 space-y-6">
-      {/* HEADER */}
       <header className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">
             Dashboard Portafoglio — Monitoraggio & Ribilanciamento
           </h1>
           <p className="text-sm text-gray-500 flex items-center gap-1 mt-1">
-            <Info className="w-4 h-4" /> Aggiornamento automatico ogni 15 minuti
+            <Info className="w-4 h-4" /> Aggiornamento automatico ogni 15 min
           </p>
         </div>
         <button
@@ -570,7 +617,12 @@ export default function PortfolioDashboard() {
         </button>
       </header>
 
-      {/* ASSETS TABLE */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+          {error}
+        </div>
+      )}
+
       <section className="bg-white p-4 rounded-2xl shadow">
         <h2 className="font-semibold mb-4">Asset nel portafoglio</h2>
         <span className="text-sm text-gray-600">
@@ -581,7 +633,7 @@ export default function PortfolioDashboard() {
             <thead>
               <tr className="bg-gray-50 text-gray-600 border-b">
                 <th className="py-2 px-3 text-left">Nome</th>
-                <th className="px-3 text-left">ISIN</th>
+                <th className="px-3 text-left">Ticker/ISIN</th>
                 <th className="px-3 text-right">Valore attuale</th>
                 <th className="px-3 text-right">Perf. €</th>
                 <th className="px-3 text-right">Perf. %</th>
@@ -603,7 +655,8 @@ export default function PortfolioDashboard() {
                     a.costBasis && a.lastPrice
                       ? ((a.lastPrice - a.costBasis) / a.costBasis) * 100
                       : 0;
-                  const weight = weights.find((item) => item.id === a.id)?.weight || 0;
+                  const weight =
+                    weights.find((item) => item.id === a.id)?.weight || 0;
 
                   return (
                     <tr
@@ -613,7 +666,9 @@ export default function PortfolioDashboard() {
                       } hover:bg-gray-100`}
                     >
                       <td className="py-2 px-3 font-medium text-left">{a.name}</td>
-                      <td className="px-3 text-gray-500 text-left">{a.identifier}</td>
+                      <td className="px-3 text-gray-500 text-left">
+                        {a.identifier}
+                      </td>
                       <td className="px-3 text-right">{formatCurrency(value)}</td>
                       <td
                         className={`px-3 text-right ${
@@ -637,10 +692,11 @@ export default function PortfolioDashboard() {
         </div>
       </section>
 
-      {/* STARTUP TABLE */}
       <section className="bg-white p-4 rounded-2xl shadow">
         <h2 className="font-semibold mb-4">Investimenti startup</h2>
-        <span className="text-sm text-gray-600">Totale: {formatCurrency(totalPEValue)}</span>
+        <span className="text-sm text-gray-600">
+          Totale: {formatCurrency(totalPEValue)}
+        </span>
         <div className="overflow-x-auto">
           <table className="w-full text-sm border-collapse">
             <thead>
@@ -660,7 +716,9 @@ export default function PortfolioDashboard() {
                 >
                   <td className="py-2 px-3 font-medium">{p.name}</td>
                   <td className="px-3 text-right">{formatCurrency(p.fee)}</td>
-                  <td className="px-3 text-right">{formatCurrency(p.invested)}</td>
+                  <td className="px-3 text-right">
+                    {formatCurrency(p.invested)}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -668,7 +726,6 @@ export default function PortfolioDashboard() {
         </div>
       </section>
 
-      {/* PRIVATE EQUITY TABLE */}
       <section className="bg-white p-4 rounded-2xl shadow">
         <h2 className="font-semibold mb-4">Investimenti Private Equity</h2>
         <span className="text-sm text-gray-600">
@@ -692,8 +749,12 @@ export default function PortfolioDashboard() {
                   } hover:bg-gray-100`}
                 >
                   <td className="py-2 px-3 font-medium">{f.name}</td>
-                  <td className="px-3 text-right">{formatCurrency(f.costBasis)}</td>
-                  <td className="px-3 text-right">{formatCurrency(f.lastPrice)}</td>
+                  <td className="px-3 text-right">
+                    {formatCurrency(f.costBasis)}
+                  </td>
+                  <td className="px-3 text-right">
+                    {formatCurrency(f.lastPrice)}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -701,7 +762,6 @@ export default function PortfolioDashboard() {
         </div>
       </section>
 
-      {/* STATISTICS */}
       <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-white p-4 rounded-2xl shadow">
           <h3 className="font-semibold mb-2 flex items-center gap-2">
@@ -710,13 +770,14 @@ export default function PortfolioDashboard() {
           {totals.best ? (
             <div>
               <div className="text-lg font-semibold">{totals.best.name}</div>
-              <div className="text-green-600">{(totals.best.perf * 100).toFixed(2)}%</div>
+              <div className="text-green-600">
+                {(totals.best.perf * 100).toFixed(2)}%
+              </div>
             </div>
           ) : (
             <div className="text-gray-500">Dati insufficienti</div>
           )}
         </div>
-
         <div className="bg-white p-4 rounded-2xl shadow">
           <h3 className="font-semibold mb-2 flex items-center gap-2">
             <TrendingDown className="w-5 h-5" /> Peggiore performance
@@ -725,7 +786,9 @@ export default function PortfolioDashboard() {
             <div>
               <div className="text-lg font-semibold">{totals.worst.name}</div>
               <div
-                className={totals.worst.perf >= 0 ? "text-green-600" : "text-red-600"}
+                className={
+                  totals.worst.perf >= 0 ? "text-green-600" : "text-red-600"
+                }
               >
                 {(totals.worst.perf * 100).toFixed(2)}%
               </div>
@@ -734,7 +797,6 @@ export default function PortfolioDashboard() {
             <div className="text-gray-500">Dati insufficienti</div>
           )}
         </div>
-
         <div className="bg-white p-4 rounded-2xl shadow">
           <h3 className="font-semibold mb-2 flex items-center gap-2">
             <Target className="w-5 h-5" /> Rendimento portafoglio
@@ -749,17 +811,24 @@ export default function PortfolioDashboard() {
           <div className="mt-2 text-sm space-y-1">
             <div>
               <span className="text-gray-500">Capitale investito: </span>
-              <span className="font-semibold">{formatCurrency(totals.totalCost)}</span>
+              <span className="font-semibold">
+                {formatCurrency(totals.totalCost)}
+              </span>
             </div>
             <div>
               <span className="text-gray-500">Valore attuale: </span>
-              <span className="font-semibold">{formatCurrency(totals.totalValue)}</span>
+              <span className="font-semibold">
+                {formatCurrency(totals.totalValue)}
+              </span>
             </div>
             <div>
               <span className="text-gray-500">Totale portafoglio: </span>
               <span className="font-semibold">
                 {formatCurrency(
-                  totalEquityValue + TOTAL_CASH + totalPEValue + totalPrivateEquityValue
+                  totalEquityValue +
+                    TOTAL_CASH +
+                    totalPEValue +
+                    totalPrivateEquityValue
                 )}
               </span>
             </div>
@@ -767,12 +836,11 @@ export default function PortfolioDashboard() {
         </div>
       </section>
 
-      {/* CHARTS */}
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Asset Class + Startup + Private Equity */}
         <div className="bg-white p-4 rounded-2xl shadow">
           <h3 className="font-semibold mb-2 flex items-center gap-2">
-            <PieChartIcon className="w-5 h-5" /> Asset Class + Startup + Private Equity
+            <PieChartIcon className="w-5 h-5" /> Distribuzione Asset Class +
+            Startup + PE
           </h3>
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
@@ -787,13 +855,20 @@ export default function PortfolioDashboard() {
                   label={(d) => d.name}
                 >
                   {classWithStartup.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    <Cell
+                      key={`cell-${index}`}
+                      fill={CHART_COLORS[index % CHART_COLORS.length]}
+                    />
                   ))}
                 </Pie>
                 <ReTooltip
                   formatter={(v, name) => [
                     `${round2(
-                      (v / (totals.totalValue + totalPEValue + totalPrivateEquityValue)) * 100
+                      (v /
+                        (totals.totalValue +
+                          totalPEValue +
+                          totalPrivateEquityValue)) *
+                        100
                     )}%`,
                     name,
                   ]}
@@ -803,10 +878,9 @@ export default function PortfolioDashboard() {
           </div>
         </div>
 
-        {/* Asset Class + Startup + Private Equity + Liquidità */}
         <div className="bg-white p-4 rounded-2xl shadow">
           <h3 className="font-semibold mb-2 flex items-center gap-2">
-            <PieChartIcon className="w-5 h-5" /> Distribuzione Completa (con Liquidità)
+            <PieChartIcon className="w-5 h-5" /> Distribuzione con Liquidità
           </h3>
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
@@ -821,7 +895,10 @@ export default function PortfolioDashboard() {
                   label={(d) => d.name}
                 >
                   {classWithStartupAndCash.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    <Cell
+                      key={`cell-${index}`}
+                      fill={CHART_COLORS[index % CHART_COLORS.length]}
+                    />
                   ))}
                 </Pie>
                 <ReTooltip
@@ -843,7 +920,6 @@ export default function PortfolioDashboard() {
         </div>
       </section>
 
-      {/* REBALANCING */}
       <section className="bg-white p-4 rounded-2xl shadow">
         <h2 className="font-semibold mb-3 flex items-center gap-2">
           <Target className="w-5 h-5" /> Suggerimenti di ribilanciamento
@@ -870,7 +946,11 @@ export default function PortfolioDashboard() {
                   <td className="py-2">{x.name}</td>
                   <td>{x.currentWeight.toFixed(2)}%</td>
                   <td>{x.targetWeight.toFixed(2)}%</td>
-                  <td className={x.deltaValue >= 0 ? "text-green-600" : "text-red-600"}>
+                  <td
+                    className={
+                      x.deltaValue >= 0 ? "text-green-600" : "text-red-600"
+                    }
+                  >
                     {formatCurrency(x.deltaValue)}
                   </td>
                   <td>{x.qty.toFixed(4)}</td>
@@ -883,8 +963,9 @@ export default function PortfolioDashboard() {
           </table>
         </div>
         <p className="text-xs text-gray-500 mt-2">
-          Nota: il target % viene normalizzato per sommare a 100%. Le quantità sono stime
-          basate sugli ultimi prezzi e non includono commissioni o slippage.
+          Nota: il target % viene normalizzato per sommare a 100%. Le quantità
+          sono stime basate sugli ultimi prezzi e non includono commissioni o
+          slippage.
         </p>
       </section>
     </div>

@@ -680,444 +680,299 @@ const projectedGain = useMemo(() => {
   }, [fetchAllPrices]);
 
   return (
-    <div className="max-w-7xl mx-auto p-4 space-y-6">
-      <header className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold">
-            Dashboard Portafoglio — Monitoraggio & Ribilanciamento
-          </h1>
-          <p className="text-sm text-gray-500 flex items-center gap-1 mt-1">
-            <Info className="w-4 h-4" /> Aggiornamento automatico ogni 15 min
-          </p>
-        </div>
-        <button
-          onClick={fetchAllPrices}
-          className="bg-white text-sky-600 font-semibold px-4 py-2 rounded-2xl inline-flex items-center gap-2 
-             shadow-[4px_4px_8px_rgba(0,0,0,0.06),-4px_-4px_8px_rgba(255,255,255,0.8)]
-             hover:shadow-[2px_2px_4px_rgba(0,0,0,0.08),-2px_-2px_4px_rgba(255,255,255,0.9)]
-             transition-shadow duration-150"
-        >
-          <RefreshCw className="w-4 h-4" /> Aggiorna tutti i prezzi
-        </button>
-      </header>
-
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-          {error}
-        </div>
-      )}
-
-      <section className="bg-white p-4 rounded-2xl shadow">
-        <h2 className="font-semibold mb-4">Asset nel portafoglio</h2>
-        <span className="text-sm text-gray-600">
-          Totale: {formatCurrency(totalEquityValue)}
-        </span>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm border-collapse">
-            <thead>
-              <tr className="bg-gray-50 text-gray-600 border-b">
-                <th className="py-2 px-3 text-left">Nome</th>
-                <th className="px-3 text-left">Ticker/ISIN</th>
-                <th className="px-3 text-right">Valore attuale</th>
-                <th className="px-3 text-right">Perf. €</th>
-                <th className="px-3 text-right">Perf. %</th>
-                <th className="px-3 text-right">Peso attuale</th>
-                <th className="px-3 text-right">Peso target</th>
-                <th className="px-3 text-right">Asset Class</th>
-              </tr>
-            </thead>
-            <tbody>
-              {assets
-                .filter((a) => a.assetClass !== "Private equity")
-                .map((a, i) => {
-                  const value = a.lastPrice ? a.lastPrice * (a.quantity || 0) : 0;
-                  const perfEuro =
-                    a.costBasis && a.lastPrice
-                      ? (a.lastPrice - a.costBasis) * (a.quantity || 0)
-                      : 0;
-                  const perfPct =
-                    a.costBasis && a.lastPrice
-                      ? ((a.lastPrice - a.costBasis) / a.costBasis) * 100
-                      : 0;
-                  const weight =
-                    weights.find((item) => item.id === a.id)?.weight || 0;
-
-                  return (
-                    <tr
-                      key={a.id}
-                      className={`border-b ${
-                        i % 2 === 0 ? "bg-white" : "bg-gray-50"
-                      } hover:bg-gray-100`}
-                    >
-                      <td className="py-2 px-3 font-medium text-left">{a.name}</td>
-                      <td className="px-3 text-gray-500 text-left">
-                        {a.identifier}
-                      </td>
-                      <td className="px-3 text-right">{formatCurrency(value)}</td>
-                      <td
-                        className={`px-3 text-right ${
-                          perfEuro >= 0 ? "text-green-600" : "text-red-600"
-                        }`}
-                      >
-                        {perfEuro >= 0 ? "+" : "-"}
-                        {formatCurrency(Math.abs(perfEuro))}
-                      </td>
-                      <td className="px-3 text-right">
-                        <PerfBadge value={perfPct} />
-                      </td>
-                      <td className="px-3 text-right">{weight.toFixed(2)}%</td>
-                      <td className="px-3 text-right">{a.targetWeight}%</td>
-                      <td className="px-3 text-right">{a.assetClass}</td>
-                    </tr>
-                  );
-                })}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section className="bg-white p-4 rounded-2xl shadow">
-        <h2 className="font-semibold mb-4">Investimenti startup</h2>
-        <span className="text-sm text-gray-600">
-          Totale: {formatCurrency(totalPEValue)}
-        </span>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm border-collapse">
-            <thead>
-              <tr className="bg-gray-50 text-gray-600 border-b">
-                <th className="py-2 px-3 text-left">Nome startup</th>
-                <th className="px-3 text-right">Commissioni</th>
-                <th className="px-3 text-right">Importo investito</th>
-              </tr>
-            </thead>
-            <tbody>
-              {startup.map((p, i) => (
-                <tr
-                  key={p.id}
-                  className={`border-b ${
-                    i % 2 === 0 ? "bg-white" : "bg-gray-50"
-                  } hover:bg-gray-100`}
-                >
-                  <td className="py-2 px-3 font-medium">{p.name}</td>
-                  <td className="px-3 text-right">{formatCurrency(p.fee)}</td>
-                  <td className="px-3 text-right">
-                    {formatCurrency(p.invested)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section className="bg-white p-4 rounded-2xl shadow">
-        <h2 className="font-semibold mb-4">Investimenti Private Equity</h2>
-        <span className="text-sm text-gray-600">
-          Totale: {formatCurrency(totalPrivateEquityValue)}
-        </span>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm border-collapse">
-            <thead>
-              <tr className="bg-gray-50 text-gray-600 border-b">
-                <th className="py-2 px-3 text-left">Nome Fondo</th>
-                <th className="px-3 text-right">Prezzo acquisto</th>
-                <th className="px-3 text-right">Prezzo attuale</th>
-              </tr>
-            </thead>
-            <tbody>
-              {privateEquity.map((f, i) => (
-                <tr
-                  key={f.id}
-                  className={`border-b ${
-                    i % 2 === 0 ? "bg-white" : "bg-gray-50"
-                  } hover:bg-gray-100`}
-                >
-                  <td className="py-2 px-3 font-medium">{f.name}</td>
-                  <td className="px-3 text-right">
-                    {formatCurrency(f.costBasis)}
-                  </td>
-                  <td className="px-3 text-right">
-                    {formatCurrency(f.lastPrice)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white p-4 rounded-2xl shadow">
-          <h3 className="font-semibold mb-2 flex items-center gap-2">
-            <TrendingUp className="w-5 h-5" /> Migliore performance
-          </h3>
-          {totals.best ? (
-            <div>
-              <div className="text-lg font-semibold">{totals.best.name}</div>
-              <div className="text-green-600">
-                {(totals.best.perf * 100).toFixed(2)}%
-              </div>
-            </div>
-          ) : (
-            <div className="text-gray-500">Dati insufficienti</div>
-          )}
-        </div>
-        <div className="bg-white p-4 rounded-2xl shadow">
-          <h3 className="font-semibold mb-2 flex items-center gap-2">
-            <TrendingDown className="w-5 h-5" /> Peggiore performance
-          </h3>
-          {totals.worst ? (
-            <div>
-              <div className="text-lg font-semibold">{totals.worst.name}</div>
-              <div
-                className={
-                  totals.worst.perf >= 0 ? "text-green-600" : "text-red-600"
-                }
-              >
-                {(totals.worst.perf * 100).toFixed(2)}%
-              </div>
-            </div>
-          ) : (
-            <div className="text-gray-500">Dati insufficienti</div>
-          )}
-        </div>
-        <div className="bg-white p-4 rounded-2xl shadow">
-          <h3 className="font-semibold mb-2 flex items-center gap-2">
-            <Target className="w-5 h-5" /> Rendimento portafoglio
-          </h3>
-          <div
-            className={`text-3xl font-bold ${
-              totals.totalReturn >= 0 ? "text-green-600" : "text-red-600"
-            }`}
-          >
-            {(totals.totalReturn * 100).toFixed(2)}%
-          </div>
-          <div className="mt-2 text-sm space-y-1">
-            <div>
-              <span className="text-gray-500">Capitale investito: </span>
-              <span className="font-semibold">
-                {formatCurrency(totals.totalCost)}
-              </span>
-            </div>
-            <div>
-              <span className="text-gray-500">Valore attuale: </span>
-              <span className="font-semibold">
-                {formatCurrency(totals.totalValue)}
-              </span>
-            </div>
-            <div>
-              <span className="text-gray-500">Totale portafoglio: </span>
-              <span className="font-semibold">
-                {formatCurrency(
-                  totalEquityValue +
-                    TOTAL_CASH +
-                    totalPEValue +
-                    totalPrivateEquityValue
-                )}
-              </span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-<section className="bg-white p-4 rounded-2xl shadow">
-  <h2 className="font-semibold mb-4 flex items-center gap-2">
-    <LineChartIcon className="w-5 h-5" /> Proiezione crescita portafoglio
-  </h2>
-
-  {/* INPUT */}
-  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-    <div>
-      <label className="block text-sm font-medium text-gray-700 mb-2">
-        Rendimento annuo atteso (%)
-      </label>
-      <input
-        type="number"
-        value={expectedReturn}
-        onChange={(e) => setExpectedReturn(parseFloat(e.target.value) || 0)}
-        step="0.5"
-        min="0"
-        max="30"
-        className="w-full px-3 py-2 border border-gray-300 rounded-lg
-                   focus:ring-2 focus:ring-sky-500 focus:border-transparent"
-      />
-    </div>
-
-    <div>
-      <label className="block text-sm font-medium text-gray-700 mb-2">
-        Investimento mensile (€)
-      </label>
-      <input
-        type="number"
-        value={monthlyContribution}
-        onChange={(e) =>
-          setMonthlyContribution(parseFloat(e.target.value) || 0)
-        }
-        step="50"
-        min="0"
-        className="w-full px-3 py-2 border border-gray-300 rounded-lg
-                   focus:ring-2 focus:ring-sky-500 focus:border-transparent"
-      />
-    </div>
-
-    <div>
-      <label className="block text-sm font-medium text-gray-700 mb-2">
-        Anni di proiezione
-      </label>
-      <input
-        type="number"
-        value={projectionYears}
-        onChange={(e) => setProjectionYears(parseInt(e.target.value) || 1)}
-        step="1"
-        min="1"
-        max="50"
-        className="w-full px-3 py-2 border border-gray-300 rounded-lg
-                   focus:ring-2 focus:ring-sky-500 focus:border-transparent"
-      />
-    </div>
-  </div>
-
-  {/* KPI */}
-  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-    <div className="bg-gray-50 p-4 rounded-lg">
-      <div className="text-sm text-gray-600">Capitale investito totale</div>
-      <div className="text-2xl font-bold text-gray-900">
-        {formatCurrency(totalInvested)}
-      </div>
-    </div>
-
-    <div className="bg-blue-50 p-4 rounded-lg">
-      <div className="text-sm text-gray-600">
-        Valore stimato ({projectionYears} anni)
-      </div>
-      <div className="text-2xl font-bold text-blue-600">
-        {formatCurrency(finalProjectedValue)}
-      </div>
-    </div>
-
-    <div className="bg-green-50 p-4 rounded-lg">
-      <div className="text-sm text-gray-600">Interessi stimati</div>
-      <div className="text-2xl font-bold text-green-600">
-        +{formatCurrency(projectedGain)}
-      </div>
-      <div className="text-xs text-gray-500 mt-1">
-        ROI:{" "}
-        {totalInvested > 0
-          ? ((projectedGain / totalInvested) * 100).toFixed(1)
-          : 0}
-        %
-      </div>
-    </div>
-  </div>
-
-  {/* GRAFICO */}
-  <div className="h-96">
-    <ResponsiveContainer width="100%" height="100%">
-      <LineChart data={projectionData}>
-        <CartesianGrid strokeDasharray="3 3" />
-
-        <XAxis
-          dataKey="year"
-          label={{ value: "Anni", position: "insideBottom", offset: -5 }}
-        />
-
-        <YAxis
-          label={{ value: "Valore (€)", angle: -90, position: "insideLeft" }}
-          tickFormatter={(v) => `€${(v / 1000).toFixed(0)}k`}
-        />
-
-        <ReTooltip
-          formatter={(value, name) => [
-            formatCurrency(value),
-            name === "invested"
-              ? "Capitale investito"
-              : "Capitale + interessi",
-          ]}
-          labelFormatter={(label) => `Anno ${label}`}
-        />
-
-        <Legend />
-
-        <Line
-          type="monotone"
-          dataKey="invested"
-          name="Capitale investito"
-          stroke="#64748b"
-          strokeWidth={2}
-          strokeDasharray="5 5"
-          dot={false}
-        />
-
-        <Line
-          type="monotone"
-          dataKey="total"
-          name="Capitale + interessi"
-          stroke="#2563eb"
-          strokeWidth={3}
-          dot={false}
-        />
-      </LineChart>
-    </ResponsiveContainer>
-  </div>
-
-  <p className="text-xs text-gray-500 mt-4">
-    Nota: simulazione basata su un rendimento annuo costante del{" "}
-    {expectedReturn}%. I rendimenti reali possono variare e la presente
-    proiezione non costituisce consulenza finanziaria.
-  </p>
-</section>
-
-        </div>
-      </section>
-
-      <section className="bg-white p-4 rounded-2xl shadow">
-        <h2 className="font-semibold mb-3 flex items-center gap-2">
-          <Target className="w-5 h-5" /> Suggerimenti di ribilanciamento
-        </h2>
-        <p className="text-sm text-gray-600 mb-3">
-          Budget mensile disponibile:{" "}
-          <span className="font-semibold">{formatCurrency(MONTHLY_BUDGET)}</span>
+  <div className="max-w-7xl mx-auto p-4 space-y-6">
+    {/* HEADER */}
+    <header className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+      <div>
+        <h1 className="text-2xl font-bold">
+          Dashboard Portafoglio — Monitoraggio & Ribilanciamento
+        </h1>
+        <p className="text-sm text-gray-500 flex items-center gap-1 mt-1">
+          <Info className="w-4 h-4" /> Aggiornamento automatico ogni 15 min
         </p>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead>
-              <tr className="text-sm text-gray-500 border-b">
-                <th className="py-2">Asset</th>
-                <th>Attuale %</th>
-                <th>Target % (normalizzato)</th>
-                <th>Delta valore</th>
-                <th>Quantità stimata</th>
-                <th className="text-right">Acquisto mese</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rebalance.actions.map((x) => (
-                <tr key={x.id} className="border-b">
-                  <td className="py-2">{x.name}</td>
-                  <td>{x.currentWeight.toFixed(2)}%</td>
-                  <td>{x.targetWeight.toFixed(2)}%</td>
-                  <td
-                    className={
-                      x.deltaValue >= 0 ? "text-green-600" : "text-red-600"
-                    }
+      </div>
+      <button
+        onClick={fetchAllPrices}
+        className="bg-white text-sky-600 font-semibold px-4 py-2 rounded-2xl inline-flex items-center gap-2 
+                   shadow-[4px_4px_8px_rgba(0,0,0,0.06),-4px_-4px_8px_rgba(255,255,255,0.8)]
+                   hover:shadow-[2px_2px_4px_rgba(0,0,0,0.08),-2px_-2px_4px_rgba(255,255,255,0.9)]
+                   transition-shadow duration-150"
+      >
+        <RefreshCw className="w-4 h-4" /> Aggiorna tutti i prezzi
+      </button>
+    </header>
+
+    {/* ERROR */}
+    {error && (
+      <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+        {error}
+      </div>
+    )}
+
+    {/* ASSET DEL PORTAFOGLIO */}
+    <section className="bg-white p-4 rounded-2xl shadow">
+      <h2 className="font-semibold mb-4">Asset nel portafoglio</h2>
+      <span className="text-sm text-gray-600">
+        Totale: {formatCurrency(totalEquityValue)}
+      </span>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm border-collapse">
+          <thead>
+            <tr className="bg-gray-50 text-gray-600 border-b">
+              <th className="py-2 px-3 text-left">Nome</th>
+              <th className="px-3 text-left">Ticker/ISIN</th>
+              <th className="px-3 text-right">Valore attuale</th>
+              <th className="px-3 text-right">Perf. €</th>
+              <th className="px-3 text-right">Perf. %</th>
+              <th className="px-3 text-right">Peso attuale</th>
+              <th className="px-3 text-right">Peso target</th>
+              <th className="px-3 text-right">Asset Class</th>
+            </tr>
+          </thead>
+          <tbody>
+            {assets
+              .filter((a) => a.assetClass !== "Private equity")
+              .map((a, i) => {
+                const value = a.lastPrice ? a.lastPrice * (a.quantity || 0) : 0;
+                const perfEuro =
+                  a.costBasis && a.lastPrice
+                    ? (a.lastPrice - a.costBasis) * (a.quantity || 0)
+                    : 0;
+                const perfPct =
+                  a.costBasis && a.lastPrice
+                    ? ((a.lastPrice - a.costBasis) / a.costBasis) * 100
+                    : 0;
+                const weight =
+                  weights.find((item) => item.id === a.id)?.weight || 0;
+
+                return (
+                  <tr
+                    key={a.id}
+                    className={`border-b ${
+                      i % 2 === 0 ? "bg-white" : "bg-gray-50"
+                    } hover:bg-gray-100`}
                   >
-                    {formatCurrency(x.deltaValue)}
-                  </td>
-                  <td>{x.qty.toFixed(4)}</td>
-                  <td className="text-right text-green-600">
-                    {formatCurrency(x.monthlyBuyEUR)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                    <td className="py-2 px-3 font-medium text-left">{a.name}</td>
+                    <td className="px-3 text-gray-500 text-left">{a.identifier}</td>
+                    <td className="px-3 text-right">{formatCurrency(value)}</td>
+                    <td
+                      className={`px-3 text-right ${
+                        perfEuro >= 0 ? "text-green-600" : "text-red-600"
+                      }`}
+                    >
+                      {perfEuro >= 0 ? "+" : "-"}
+                      {formatCurrency(Math.abs(perfEuro))}
+                    </td>
+                    <td className="px-3 text-right">
+                      <PerfBadge value={perfPct} />
+                    </td>
+                    <td className="px-3 text-right">{weight.toFixed(2)}%</td>
+                    <td className="px-3 text-right">{a.targetWeight}%</td>
+                    <td className="px-3 text-right">{a.assetClass}</td>
+                  </tr>
+                );
+              })}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    {/* INVESTIMENTI STARTUP */}
+    <section className="bg-white p-4 rounded-2xl shadow">
+      <h2 className="font-semibold mb-4">Investimenti startup</h2>
+      <span className="text-sm text-gray-600">
+        Totale: {formatCurrency(totalPEValue)}
+      </span>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm border-collapse">
+          <thead>
+            <tr className="bg-gray-50 text-gray-600 border-b">
+              <th className="py-2 px-3 text-left">Nome startup</th>
+              <th className="px-3 text-right">Commissioni</th>
+              <th className="px-3 text-right">Importo investito</th>
+            </tr>
+          </thead>
+          <tbody>
+            {startup.map((p, i) => (
+              <tr
+                key={p.id}
+                className={`border-b ${i % 2 === 0 ? "bg-white" : "bg-gray-50"} hover:bg-gray-100`}
+              >
+                <td className="py-2 px-3 font-medium">{p.name}</td>
+                <td className="px-3 text-right">{formatCurrency(p.fee)}</td>
+                <td className="px-3 text-right">{formatCurrency(p.invested)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    {/* INVESTIMENTI PRIVATE EQUITY */}
+    <section className="bg-white p-4 rounded-2xl shadow">
+      <h2 className="font-semibold mb-4">Investimenti Private Equity</h2>
+      <span className="text-sm text-gray-600">
+        Totale: {formatCurrency(totalPrivateEquityValue)}
+      </span>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm border-collapse">
+          <thead>
+            <tr className="bg-gray-50 text-gray-600 border-b">
+              <th className="py-2 px-3 text-left">Nome Fondo</th>
+              <th className="px-3 text-right">Prezzo acquisto</th>
+              <th className="px-3 text-right">Prezzo attuale</th>
+            </tr>
+          </thead>
+          <tbody>
+            {privateEquity.map((f, i) => (
+              <tr
+                key={f.id}
+                className={`border-b ${i % 2 === 0 ? "bg-white" : "bg-gray-50"} hover:bg-gray-100`}
+              >
+                <td className="py-2 px-3 font-medium">{f.name}</td>
+                <td className="px-3 text-right">{formatCurrency(f.costBasis)}</td>
+                <td className="px-3 text-right">{formatCurrency(f.lastPrice)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    {/* KPI E PROIEZIONE CRESCITA */}
+    <section className="bg-white p-4 rounded-2xl shadow">
+      <h2 className="font-semibold mb-4 flex items-center gap-2">
+        <LineChartIcon className="w-5 h-5" /> Proiezione crescita portafoglio
+      </h2>
+
+      {/* INPUT */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Rendimento annuo atteso (%)</label>
+          <input
+            type="number"
+            value={expectedReturn}
+            onChange={(e) => setExpectedReturn(parseFloat(e.target.value) || 0)}
+            step="0.5"
+            min="0"
+            max="30"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg
+                       focus:ring-2 focus:ring-sky-500 focus:border-transparent"
+          />
         </div>
-        <p className="text-xs text-gray-500 mt-2">
-          Nota: il target % viene normalizzato per sommare a 100%. Le quantità
-          sono stime basate sugli ultimi prezzi e non includono commissioni o
-          slippage.
-        </p>
-      </section>
-    </div>
-  );
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Investimento mensile (€)</label>
+          <input
+            type="number"
+            value={monthlyContribution}
+            onChange={(e) => setMonthlyContribution(parseFloat(e.target.value) || 0)}
+            step="50"
+            min="0"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg
+                       focus:ring-2 focus:ring-sky-500 focus:border-transparent"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Anni di proiezione</label>
+          <input
+            type="number"
+            value={projectionYears}
+            onChange={(e) => setProjectionYears(parseInt(e.target.value) || 1)}
+            step="1"
+            min="1"
+            max="50"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg
+                       focus:ring-2 focus:ring-sky-500 focus:border-transparent"
+          />
+        </div>
+      </div>
+
+      {/* KPI */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="bg-gray-50 p-4 rounded-lg">
+          <div className="text-sm text-gray-600">Capitale investito totale</div>
+          <div className="text-2xl font-bold text-gray-900">{formatCurrency(totalInvested)}</div>
+        </div>
+        <div className="bg-blue-50 p-4 rounded-lg">
+          <div className="text-sm text-gray-600">Valore stimato ({projectionYears} anni)</div>
+          <div className="text-2xl font-bold text-blue-600">{formatCurrency(finalProjectedValue)}</div>
+        </div>
+        <div className="bg-green-50 p-4 rounded-lg">
+          <div className="text-sm text-gray-600">Interessi stimati</div>
+          <div className="text-2xl font-bold text-green-600">+{formatCurrency(projectedGain)}</div>
+          <div className="text-xs text-gray-500 mt-1">
+            ROI: {totalInvested > 0 ? ((projectedGain / totalInvested) * 100).toFixed(1) : 0}%
+          </div>
+        </div>
+      </div>
+
+      {/* GRAFICO */}
+      <div className="h-96">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={projectionData}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="year" label={{ value: "Anni", position: "insideBottom", offset: -5 }} />
+            <YAxis label={{ value: "Valore (€)", angle: -90, position: "insideLeft" }} tickFormatter={(v) => `€${(v / 1000).toFixed(0)}k`} />
+            <ReTooltip
+              formatter={(value, name) => [
+                formatCurrency(value),
+                name === "invested" ? "Capitale investito" : "Capitale + interessi",
+              ]}
+              labelFormatter={(label) => `Anno ${label}`}
+            />
+            <Legend />
+            <Line type="monotone" dataKey="invested" name="Capitale investito" stroke="#64748b" strokeWidth={2} strokeDasharray="5 5" dot={false} />
+            <Line type="monotone" dataKey="total" name="Capitale + interessi" stroke="#2563eb" strokeWidth={3} dot={false} />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+
+      <p className="text-xs text-gray-500 mt-4">
+        Nota: simulazione basata su un rendimento annuo costante del {expectedReturn}%. I rendimenti reali possono variare e la presente proiezione non costituisce consulenza finanziaria.
+      </p>
+    </section>
+
+    {/* SUGGERIMENTI DI RIBILANCIAMENTO */}
+    <section className="bg-white p-4 rounded-2xl shadow">
+      <h2 className="font-semibold mb-3 flex items-center gap-2">
+        <Target className="w-5 h-5" /> Suggerimenti di ribilanciamento
+      </h2>
+      <p className="text-sm text-gray-600 mb-3">
+        Budget mensile disponibile: <span className="font-semibold">{formatCurrency(MONTHLY_BUDGET)}</span>
+      </p>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left">
+          <thead>
+            <tr className="text-sm text-gray-500 border-b">
+              <th className="py-2">Asset</th>
+              <th>Attuale %</th>
+              <th>Target % (normalizzato)</th>
+              <th>Delta valore</th>
+              <th>Quantità stimata</th>
+              <th className="text-right">Acquisto mese</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rebalance.actions.map((x) => (
+              <tr key={x.id} className="border-b">
+                <td className="py-2">{x.name}</td>
+                <td>{x.currentWeight.toFixed(2)}%</td>
+                <td>{x.targetWeight.toFixed(2)}%</td>
+                <td className={x.deltaValue >= 0 ? "text-green-600" : "text-red-600"}>
+                  {formatCurrency(x.deltaValue)}
+                </td>
+                <td>{x.qty.toFixed(4)}</td>
+                <td className="text-right text-green-600">{formatCurrency(x.monthlyBuyEUR)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-xs text-gray-500 mt-2">
+        Nota: il target % viene normalizzato per sommare a 100%. Le quantità sono stime basate sugli ultimi prezzi e non includono commissioni o slippage.
+      </p>
+    </section>
+  </div>
+);
+
 }

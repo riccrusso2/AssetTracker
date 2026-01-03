@@ -513,10 +513,6 @@ const calculateRebalancing = (assets, totalValue, monthlyBudget) => {
   return { actions: actionsWithPlan, diffSummary, monthlyBudget };
 };
 
-const [projectionYears, setProjectionYears] = useState(DEFAULT_PROJECTION_YEARS);
-const [expectedReturn, setExpectedReturn] = useState(DEFAULT_ANNUAL_RETURN);
-const [monthlyContribution, setMonthlyContribution] = useState(DEFAULT_MONTHLY_CONTRIBUTION);
-
 
 const projectionData = useMemo(() => {
   const startValue = totalEquityValue + TOTAL_CASH + totalPEValue + totalPrivateEquityValue;
@@ -538,6 +534,11 @@ const projectedGain = useMemo(() => {
 
 // ==================== MAIN COMPONENT ====================
 export default function PortfolioDashboard() {
+
+  const [projectionYears, setProjectionYears] = useState(DEFAULT_PROJECTION_YEARS);
+const [expectedReturn, setExpectedReturn] = useState(DEFAULT_ANNUAL_RETURN);
+const [monthlyContribution, setMonthlyContribution] = useState(DEFAULT_MONTHLY_CONTRIBUTION);
+
   const [assets, setAssets] = useLocalStorage(
     STORAGE_KEYS.ASSETS,
     getInitialAssets()
@@ -552,6 +553,7 @@ export default function PortfolioDashboard() {
   );
   const [history, setHistory] = useLocalStorage(STORAGE_KEYS.HISTORY, []);
 
+  
   const { fetchPrice, loadingIds, error } = usePriceFetcher();
   const intervalRef = useRef(null);
   const assetsRef = useRef(assets);

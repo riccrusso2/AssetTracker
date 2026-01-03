@@ -513,25 +513,6 @@ const calculateRebalancing = (assets, totalValue, monthlyBudget) => {
   return { actions: actionsWithPlan, diffSummary, monthlyBudget };
 };
 
-
-const projectionData = useMemo(() => {
-  const startValue = totalEquityValue + TOTAL_CASH + totalPEValue + totalPrivateEquityValue;
-  return calculateProjection(startValue, monthlyContribution, expectedReturn, projectionYears);
-}, [totalEquityValue, totalPEValue, totalPrivateEquityValue, monthlyContribution, expectedReturn, projectionYears]);
-
-const finalProjectedValue = useMemo(() => {
-  return projectionData.length > 0 ? projectionData[projectionData.length - 1].value : 0;
-}, [projectionData]);
-
-const totalContributed = useMemo(() => {
-  const startValue = totalEquityValue + TOTAL_CASH + totalPEValue + totalPrivateEquityValue;
-  return startValue + (monthlyContribution * 12 * projectionYears);
-}, [totalEquityValue, totalPEValue, totalPrivateEquityValue, monthlyContribution, projectionYears]);
-
-const projectedGain = useMemo(() => {
-  return finalProjectedValue - totalContributed;
-}, [finalProjectedValue, totalContributed]);
-
 // ==================== MAIN COMPONENT ====================
 export default function PortfolioDashboard() {
 
@@ -615,7 +596,25 @@ const [monthlyContribution, setMonthlyContribution] = useState(DEFAULT_MONTHLY_C
     () => calculateRebalancing(assets, totals.totalValue, MONTHLY_BUDGET),
     [assets, totals.totalValue]
   );
+  const projectionData = useMemo(() => {
+  const startValue = totalEquityValue + TOTAL_CASH + totalPEValue + totalPrivateEquityValue;
+  return calculateProjection(startValue, monthlyContribution, expectedReturn, projectionYears);
+}, [totalEquityValue, totalPEValue, totalPrivateEquityValue, monthlyContribution, expectedReturn, projectionYears]);
 
+const finalProjectedValue = useMemo(() => {
+  return projectionData.length > 0 ? projectionData[projectionData.length - 1].value : 0;
+}, [projectionData]);
+
+const totalContributed = useMemo(() => {
+  const startValue = totalEquityValue + TOTAL_CASH + totalPEValue + totalPrivateEquityValue;
+  return startValue + (monthlyContribution * 12 * projectionYears);
+}, [totalEquityValue, totalPEValue, totalPrivateEquityValue, monthlyContribution, projectionYears]);
+
+const projectedGain = useMemo(() => {
+  return finalProjectedValue - totalContributed;
+}, [finalProjectedValue, totalContributed]);
+
+  
   const fetchAllPrices = useCallback(async () => {
     const updated = await Promise.all(
       (assetsRef.current || []).map(async (a) => {

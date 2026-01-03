@@ -382,28 +382,38 @@ const calculateClassDistribution = (assets) => {
   }));
 };
 
-const calculateProjection = (startValue, monthlyInvest, annualReturn, years) => {
+const calculateProjection = (
+  startValue,
+  monthlyInvest,
+  annualReturn,
+  years
+) => {
   const monthlyRate = annualReturn / 100 / 12;
   const months = years * 12;
+
+  let investedCapital = startValue;
+  let portfolioValue = startValue;
+
   const data = [];
-  
-  let currentValue = startValue;
-  
+
   for (let month = 0; month <= months; month++) {
     if (month % 12 === 0) {
       data.push({
         year: month / 12,
-        value: round2(currentValue),
+        invested: round2(investedCapital),
+        total: round2(portfolioValue),
       });
     }
-    
+
     if (month < months) {
-      currentValue = currentValue * (1 + monthlyRate) + monthlyInvest;
+      investedCapital += monthlyInvest;
+      portfolioValue = portfolioValue * (1 + monthlyRate) + monthlyInvest;
     }
   }
-  
+
   return data;
 };
+
 
 const calculateRebalancing = (assets, totalValue, monthlyBudget) => {
   const tv = totalValue || 0;
@@ -597,22 +607,44 @@ const [monthlyContribution, setMonthlyContribution] = useState(DEFAULT_MONTHLY_C
     [assets, totals.totalValue]
   );
   const projectionData = useMemo(() => {
-  const startValue = totalEquityValue + TOTAL_CASH + totalPEValue + totalPrivateEquityValue;
-  return calculateProjection(startValue, monthlyContribution, expectedReturn, projectionYears);
-}, [totalEquityValue, totalPEValue, totalPrivateEquityValue, monthlyContribution, expectedReturn, projectionYears]);
+  const startValue =
+    totalEquityValue +
+    TOTAL_CASH +
+    totalPEValue +
+    totalPrivateEquityValue;
+
+  return calculateProjection(
+    startValue,
+    monthlyContribution,
+    expectedReturn,
+    projectionYears
+  );
+}, [
+  totalEquityValue,
+  totalPEValue,
+  totalPrivateEquityValue,
+  monthlyContribution,
+  expectedReturn,
+  projectionYears,
+]);
+
 
 const finalProjectedValue = useMemo(() => {
-  return projectionData.length > 0 ? projectionData[projectionData.length - 1].value : 0;
+  return projectionData.length
+    ? projectionData[projectionData.length - 1].total
+    : 0;
 }, [projectionData]);
 
-const totalContributed = useMemo(() => {
-  const startValue = totalEquityValue + TOTAL_CASH + totalPEValue + totalPrivateEquityValue;
-  return startValue + (monthlyContribution * 12 * projectionYears);
-}, [totalEquityValue, totalPEValue, totalPrivateEquityValue, monthlyContribution, projectionYears]);
+const totalInvested = useMemo(() => {
+  return projectionData.length
+    ? projectionData[projectionData.length - 1].invested
+    : 0;
+}, [projectionData]);
 
 const projectedGain = useMemo(() => {
-  return finalProjectedValue - totalContributed;
-}, [finalProjectedValue, totalContributed]);
+  return finalProjectedValue - totalInvested;
+}, [finalProjectedValue, totalInvested]);
+
 
   
   const fetchAllPrices = useCallback(async () => {
@@ -974,7 +1006,8 @@ const projectedGain = useMemo(() => {
   <h2 className="font-semibold mb-4 flex items-center gap-2">
     <LineChartIcon className="w-5 h-5" /> Proiezione crescita portafoglio
   </h2>
-  
+
+  {/* INPUT */}
   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
     <div>
       <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -987,10 +1020,11 @@ const projectedGain = useMemo(() => {
         step="0.5"
         min="0"
         max="30"
-        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-transparent"
+        className="w-full px-3 py-2 border border-gray-300 rounded-lg
+                   focus:ring-2 focus:ring-sky-500 focus:border-transparent"
       />
     </div>
-    
+
     <div>
       <label className="block text-sm font-medium text-gray-700 mb-2">
         Investimento mensile (€)
@@ -998,13 +1032,16 @@ const projectedGain = useMemo(() => {
       <input
         type="number"
         value={monthlyContribution}
-        onChange={(e) => setMonthlyContribution(parseFloat(e.target.value) || 0)}
+        onChange={(e) =>
+          setMonthlyContribution(parseFloat(e.target.value) || 0)
+        }
         step="50"
         min="0"
-        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-transparent"
+        className="w-full px-3 py-2 border border-gray-300 rounded-lg
+                   focus:ring-2 focus:ring-sky-500 focus:border-transparent"
       />
     </div>
-    
+
     <div>
       <label className="block text-sm font-medium text-gray-700 mb-2">
         Anni di proiezione
@@ -1016,72 +1053,102 @@ const projectedGain = useMemo(() => {
         step="1"
         min="1"
         max="50"
-        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-transparent"
+        className="w-full px-3 py-2 border border-gray-300 rounded-lg
+                   focus:ring-2 focus:ring-sky-500 focus:border-transparent"
       />
     </div>
   </div>
 
+  {/* KPI */}
   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
     <div className="bg-gray-50 p-4 rounded-lg">
-      <div className="text-sm text-gray-600">Valore iniziale</div>
+      <div className="text-sm text-gray-600">Capitale investito totale</div>
       <div className="text-2xl font-bold text-gray-900">
-        {formatCurrency(totalEquityValue + TOTAL_CASH + totalPEValue + totalPrivateEquityValue)}
+        {formatCurrency(totalInvested)}
       </div>
     </div>
-    
+
     <div className="bg-blue-50 p-4 rounded-lg">
-      <div className="text-sm text-gray-600">Valore proiettato ({projectionYears} anni)</div>
+      <div className="text-sm text-gray-600">
+        Valore stimato ({projectionYears} anni)
+      </div>
       <div className="text-2xl font-bold text-blue-600">
         {formatCurrency(finalProjectedValue)}
       </div>
     </div>
-    
+
     <div className="bg-green-50 p-4 rounded-lg">
-      <div className="text-sm text-gray-600">Guadagno previsto</div>
+      <div className="text-sm text-gray-600">Interessi stimati</div>
       <div className="text-2xl font-bold text-green-600">
         +{formatCurrency(projectedGain)}
       </div>
       <div className="text-xs text-gray-500 mt-1">
-        ROI: {totalContributed > 0 ? ((projectedGain / totalContributed) * 100).toFixed(1) : 0}%
+        ROI:{" "}
+        {totalInvested > 0
+          ? ((projectedGain / totalInvested) * 100).toFixed(1)
+          : 0}
+        %
       </div>
     </div>
   </div>
 
+  {/* GRAFICO */}
   <div className="h-96">
     <ResponsiveContainer width="100%" height="100%">
       <LineChart data={projectionData}>
         <CartesianGrid strokeDasharray="3 3" />
-        <XAxis 
-          dataKey="year" 
-          label={{ value: 'Anni', position: 'insideBottom', offset: -5 }}
+
+        <XAxis
+          dataKey="year"
+          label={{ value: "Anni", position: "insideBottom", offset: -5 }}
         />
-        <YAxis 
-          label={{ value: 'Valore (€)', angle: -90, position: 'insideLeft' }}
+
+        <YAxis
+          label={{ value: "Valore (€)", angle: -90, position: "insideLeft" }}
           tickFormatter={(v) => `€${(v / 1000).toFixed(0)}k`}
         />
-        <ReTooltip 
-          formatter={(value) => [formatCurrency(value), 'Valore portafoglio']}
+
+        <ReTooltip
+          formatter={(value, name) => [
+            formatCurrency(value),
+            name === "invested"
+              ? "Capitale investito"
+              : "Capitale + interessi",
+          ]}
           labelFormatter={(label) => `Anno ${label}`}
         />
+
         <Legend />
-        <Line 
-          type="monotone" 
-          dataKey="value" 
-          stroke="#2563eb" 
+
+        <Line
+          type="monotone"
+          dataKey="invested"
+          name="Capitale investito"
+          stroke="#64748b"
+          strokeWidth={2}
+          strokeDasharray="5 5"
+          dot={false}
+        />
+
+        <Line
+          type="monotone"
+          dataKey="total"
+          name="Capitale + interessi"
+          stroke="#2563eb"
           strokeWidth={3}
-          name="Valore portafoglio"
           dot={false}
         />
       </LineChart>
     </ResponsiveContainer>
   </div>
-  
+
   <p className="text-xs text-gray-500 mt-4">
-    Nota: Questa è una proiezione basata su un rendimento costante del {expectedReturn}% annuo. 
-    I rendimenti reali possono variare significativamente e dipendono dalle condizioni di mercato. 
-    Questa proiezione non costituisce consulenza finanziaria.
+    Nota: simulazione basata su un rendimento annuo costante del{" "}
+    {expectedReturn}%. I rendimenti reali possono variare e la presente
+    proiezione non costituisce consulenza finanziaria.
   </p>
 </section>
+
         </div>
       </section>
 

@@ -46,7 +46,7 @@ const STORAGE_KEYS = {
 };
 
 const MONTHLY_BUDGET = 500;
-const TOTAL_CASH = 10800;
+const TOTAL_CASH = 10500;
 const AUTO_REFRESH_INTERVAL = 900000; // 15 minutes
 
 const DEFAULT_PROJECTION_YEARS = 10;
@@ -204,6 +204,7 @@ const getInitialStartups = () => [
   { id: cryptoRandomId(), name: "Fintower", invested: 300, fee: 24 },
   { id: cryptoRandomId(), name: "Epic Games", invested: 300, fee: 24 },
   { id: cryptoRandomId(), name: "Mega", invested: 300, fee: 24 },
+  { id: cryptoRandomId(), name: "Aalo Atomics", invested: 300, fee: 24 },
 ];
 
 const getInitialPrivateEquity = () => [

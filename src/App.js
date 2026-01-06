@@ -760,17 +760,17 @@ const projectedGain = useMemo(() => {
       <section className="bg-white p-4 rounded-2xl shadow">
   <h2 className="font-semibold mb-4">Investimenti startup</h2>
 
-<div className="flex items-center gap-12 text-sm text-gray-600 mb-4">
-    <span>
-      Totale investito: <strong>{formatCurrency(totalPEValue)}</strong>
-    </span>
-    <span>
-      Commissioni totali: <strong>{formatCurrency(totalFees)}</strong>
-    </span>
-    <span>
-      Startup: <strong>{startupCount}</strong>
-    </span>
-  </div>
+<div className="flex flex-col gap-3 text-sm text-gray-600 mb-4">
+  <span>
+    Totale investito: <strong>{formatCurrency(totalPEValue)}</strong>
+  </span>
+  <span>
+    Commissioni totali: <strong>{formatCurrency(totalFees)}</strong>
+  </span>
+  <span>
+    Startup: <strong>{startupCount}</strong>
+  </span>
+</div>
 
   <div className="overflow-x-auto">
     <table className="w-full text-sm border-collapse">

@@ -559,10 +559,22 @@ const [monthlyContribution, setMonthlyContribution] = useState(DEFAULT_MONTHLY_C
     [assets]
   );
 
+
   const totalPEValue = useMemo(
-    () => startup.reduce((acc, p) => acc + (p.invested || 0), 0),
-    [startup]
-  );
+  () => startup.reduce((acc, p) => acc + (p.invested || 0), 0),
+  [startup]
+);
+
+const totalFees = useMemo(
+  () => startup.reduce((acc, p) => acc + (p.fee || 0), 0),
+  [startup]
+);
+
+const startupCount = useMemo(
+  () => startup.length,
+  [startup]
+);
+
 
   const totalPrivateEquityValue = useMemo(
     () => privateEquity.reduce((acc, f) => acc + (f.lastPrice || 0), 0),
@@ -747,9 +759,15 @@ const projectedGain = useMemo(() => {
 
       <section className="bg-white p-4 rounded-2xl shadow">
         <h2 className="font-semibold mb-4">Investimenti startup</h2>
-        <span className="text-sm text-gray-600">
-          Totale: {formatCurrency(totalPEValue)}
-        </span>
+        <span>
+    Totale investito: <strong>{formatCurrency(totalPEValue)}</strong>
+  </span>
+  <span>
+    Commissioni totali: <strong>{formatCurrency(totalFees)}</strong>
+  </span>
+  <span>
+    Startup: <strong>{startupCount}</strong>
+  </span>
         <div className="overflow-x-auto">
           <table className="w-full text-sm border-collapse">
             <thead>

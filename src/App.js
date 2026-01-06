@@ -760,13 +760,13 @@ const projectedGain = useMemo(() => {
       <section className="bg-white p-4 rounded-2xl shadow">
         <h2 className="font-semibold mb-4">Investimenti startup</h2>
         <span>
-    Totale investito: <strong>{formatCurrency(totalPEValue)}</strong>
+    Totale investito:{formatCurrency(totalPEValue)}
   </span>
   <span>
-    Commissioni totali: <strong>{formatCurrency(totalFees)}</strong>
+    Commissioni totali:{formatCurrency(totalFees)}
   </span>
   <span>
-    Startup: <strong>{startupCount}</strong>
+    Startup:{startupCount}
   </span>
         <div className="overflow-x-auto">
           <table className="w-full text-sm border-collapse">

@@ -760,7 +760,7 @@ const projectedGain = useMemo(() => {
       <section className="bg-white p-4 rounded-2xl shadow">
   <h2 className="font-semibold mb-4">Investimenti startup</h2>
 
-  <div className="flex flex-wrap gap-8 text-sm text-gray-600 mb-4">
+<div className="flex items-center gap-12 text-sm text-gray-600 mb-4">
     <span>
       Totale investito: <strong>{formatCurrency(totalPEValue)}</strong>
     </span>

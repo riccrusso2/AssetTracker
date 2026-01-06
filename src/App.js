@@ -758,44 +758,48 @@ const projectedGain = useMemo(() => {
       </section>
 
       <section className="bg-white p-4 rounded-2xl shadow">
-        <h2 className="font-semibold mb-4">Investimenti startup</h2>
-        <span>
-    Totale investito:{formatCurrency(totalPEValue)}
-  </span>
-  <span>
-    Commissioni totali:{formatCurrency(totalFees)}
-  </span>
-  <span>
-    Startup:{startupCount}
-  </span>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm border-collapse">
-            <thead>
-              <tr className="bg-gray-50 text-gray-600 border-b">
-                <th className="py-2 px-3 text-left">Nome startup</th>
-                <th className="px-3 text-right">Commissioni</th>
-                <th className="px-3 text-right">Importo investito</th>
-              </tr>
-            </thead>
-            <tbody>
-              {startup.map((p, i) => (
-                <tr
-                  key={p.id}
-                  className={`border-b ${
-                    i % 2 === 0 ? "bg-white" : "bg-gray-50"
-                  } hover:bg-gray-100`}
-                >
-                  <td className="py-2 px-3 font-medium">{p.name}</td>
-                  <td className="px-3 text-right">{formatCurrency(p.fee)}</td>
-                  <td className="px-3 text-right">
-                    {formatCurrency(p.invested)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
+  <h2 className="font-semibold mb-4">Investimenti startup</h2>
+
+  <div className="flex flex-wrap gap-8 text-sm text-gray-600 mb-4">
+    <span>
+      Totale investito: <strong>{formatCurrency(totalPEValue)}</strong>
+    </span>
+    <span>
+      Commissioni totali: <strong>{formatCurrency(totalFees)}</strong>
+    </span>
+    <span>
+      Startup: <strong>{startupCount}</strong>
+    </span>
+  </div>
+
+  <div className="overflow-x-auto">
+    <table className="w-full text-sm border-collapse">
+      <thead>
+        <tr className="bg-gray-50 text-gray-600 border-b">
+          <th className="py-2 px-3 text-left">Nome startup</th>
+          <th className="px-3 text-right">Commissioni</th>
+          <th className="px-3 text-right">Importo investito</th>
+        </tr>
+      </thead>
+      <tbody>
+        {startup.map((p, i) => (
+          <tr
+            key={p.id}
+            className={`border-b ${
+              i % 2 === 0 ? "bg-white" : "bg-gray-50"
+            } hover:bg-gray-100`}
+          >
+            <td className="py-2 px-3 font-medium">{p.name}</td>
+            <td className="px-3 text-right">{formatCurrency(p.fee)}</td>
+            <td className="px-3 text-right">
+              {formatCurrency(p.invested)}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+</section>
 
       <section className="bg-white p-4 rounded-2xl shadow">
         <h2 className="font-semibold mb-4">Investimenti Private Equity</h2>

@@ -124,7 +124,7 @@ const getInitialAssets = () => [
     id: "swda",
     name: "iShares Core MSCI World UCITS ETF USD (Acc)",
     identifier: "IE00B4L5Y983",
-    quantity: ,
+    quantity: 0 ,
     currency: "",
     costBasis: 0,
     targetWeight: 57,

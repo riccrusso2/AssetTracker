@@ -45,7 +45,7 @@ const STORAGE_KEYS = {
   PRIVATE_EQUITY: "pf.privateequity.v1",
 };
 
-const MONTHLY_BUDGET = 800;
+const MONTHLY_BUDGET = 1000;
 const TOTAL_CASH = 10500;
 const AUTO_REFRESH_INTERVAL = 900000; // 15 minutes
 
@@ -112,14 +112,38 @@ const getInitialAssets = () => [
     id: "ftseallworld",
     name: "FTSE All-World USD",
     identifier: "IE00BK5BQT80",
-    quantity: 96.164474,
+    quantity: 94.164474,
     currency: "",
-    costBasis: 135.73,
-    targetWeight: 65,
+    costBasis: 135.54,
+    targetWeight: 0,
     lastPrice: null,
     lastUpdated: null,
     assetClass: "ETF",
   },
+  {
+    id: "swda",
+    name: "iShares Core MSCI World UCITS ETF USD (Acc)",
+    identifier: "IE00B4L5Y983",
+    quantity: ,
+    currency: "",
+    costBasis: 0,
+    targetWeight: 57,
+    lastPrice: null,
+    lastUpdated: null,
+    assetClass: "ETF",
+  },
+   {
+        id: "msciemimi",
+        name: "iShares MSCI EM IMI ",
+        identifier: "IE00BKM4GZ66",
+        quantity: 0,
+        currency: "",
+        costBasis: 0,
+        targetWeight: 8,
+        lastPrice: null,
+        lastUpdated: null,
+        assetClass: "ETF", 
+      },
   {
     id: "worldquality",
     name: "iShares Edge MSCI World Quality Factor UCITS ETF (Acc)",

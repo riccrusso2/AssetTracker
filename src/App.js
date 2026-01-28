@@ -45,8 +45,8 @@ const STORAGE_KEYS = {
   PRIVATE_EQUITY: "pf.privateequity.v1",
 };
 
-const MONTHLY_BUDGET = 1000;
-const TOTAL_CASH = 10500;
+const MONTHLY_BUDGET = 500;
+const TOTAL_CASH = 10780;
 const AUTO_REFRESH_INTERVAL = 900000; // 15 minutes
 
 const DEFAULT_PROJECTION_YEARS = 10;
@@ -136,9 +136,9 @@ const getInitialAssets = () => [
         id: "msciemimi",
         name: "iShares MSCI EM IMI ",
         identifier: "IE00BKM4GZ66",
-        quantity: 0,
+        quantity: 13,
         currency: "",
-        costBasis: 0,
+        costBasis: 41.441,
         targetWeight: 5,
         lastPrice: null,
         lastUpdated: null,
@@ -160,9 +160,9 @@ const getInitialAssets = () => [
     id: "worldmomentum",
     name: "iShares Edge MSCI World Momentum Factor UCITS ETF (Acc)",
     identifier: "IE00BP3QZ825",
-    quantity: 14,
+    quantity: 16,
     currency: "",
-    costBasis: 83.075,
+    costBasis: 83.373125,
     targetWeight: 7,
     lastPrice: null,
     lastUpdated: null,
@@ -172,9 +172,9 @@ const getInitialAssets = () => [
     id: "worldvalue",
     name: "iShares Edge MSCI World Value Factor UCITS ETF (Acc)",
     identifier: "IE00BP3QZB59",
-    quantity: 23,
+    quantity: 26,
     currency: "",
-    costBasis: 50.07434,
+    costBasis: 50.469608,
     targetWeight: 7,
     lastPrice: null,
     lastUpdated: null,
@@ -196,9 +196,9 @@ const getInitialAssets = () => [
     id: "bitcoin",
     name: "Bitcoin",
     identifier: "XS2940466316",
-    quantity: 87,
+    quantity: 104,
     currency: "",
-    costBasis: 7.6274,
+    costBasis: 7.596277,
     targetWeight: 4,
     lastPrice: null,
     lastUpdated: null,

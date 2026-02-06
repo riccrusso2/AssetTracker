@@ -45,7 +45,7 @@ const STORAGE_KEYS = {
   PRIVATE_EQUITY: "pf.privateequity.v1",
 };
 
-const MONTHLY_BUDGET = 3000;
+const MONTHLY_BUDGET = 700;
 const TOTAL_CASH = 10780;
 const AUTO_REFRESH_INTERVAL = 900000; // 15 minutes
 

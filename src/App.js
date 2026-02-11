@@ -230,7 +230,7 @@ const getInitialStartups = () => [
   { id: cryptoRandomId(), name: "Mega", invested: 300, fee: 24 },
   { id: cryptoRandomId(), name: "Aalo Atomics", invested: 300, fee: 24 },
   { id: cryptoRandomId(), name: "Topo", invested: 300, fee: 24 },
-
+  { id: cryptoRandomId(), name: "Perplexity", invested: 300, fee: 24 },
 ];
 
 const getInitialPrivateEquity = () => [

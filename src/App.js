@@ -1,4 +1,3 @@
-
 // app.js
 import React, {
   useCallback,
@@ -228,7 +227,7 @@ const getInitialStartups = () => [
   { id: cryptoRandomId(), name: "Fintower", invested: 300, fee: 24 },
   { id: cryptoRandomId(), name: "Epic Games", invested: 300, fee: 24 },
   { id: cryptoRandomId(), name: "Mega", invested: 300, fee: 24 },
-  { id: cryptoRandomId(), name: "Aalo Atomics", invested: 300, fee: 24 },
+  { id: cryptoRandomId(), name: "Aalo Atomics", invented: 300, fee: 24 },
   { id: cryptoRandomId(), name: "Topo", invested: 300, fee: 24 },
   { id: cryptoRandomId(), name: "Perplexity", invested: 300, fee: 24 },
 ];
@@ -952,8 +951,12 @@ const projectedGain = useMemo(() => {
                   nameKey="name"
                   cx="50%"
                   cy="50%"
-                  outerRadius={110}
-                  label={(d) => d.name}
+                  outerRadius={100}
+                  label={(d) => {
+                    const total = totals.totalValue + totalPEValue + totalPrivateEquityValue;
+                    const pct = round2((d.value / total) * 100);
+                    return `${d.name} ${pct}%`;
+                  }}
                 >
                   {classWithStartup.map((entry, index) => (
                     <Cell
@@ -963,16 +966,11 @@ const projectedGain = useMemo(() => {
                   ))}
                 </Pie>
                 <ReTooltip
-                  formatter={(v, name) => [
-                    `${round2(
-                      (v /
-                        (totals.totalValue +
-                          totalPEValue +
-                          totalPrivateEquityValue)) *
-                        100
-                    )}%`,
-                    name,
-                  ]}
+                  formatter={(v, name) => {
+                    const total = totals.totalValue + totalPEValue + totalPrivateEquityValue;
+                    const pct = round2((v / total) * 100);
+                    return [`${formatCurrency(v)} (${pct}%)`, name];
+                  }}
                 />
               </PieChart>
             </ResponsiveContainer>
@@ -992,8 +990,12 @@ const projectedGain = useMemo(() => {
                   nameKey="name"
                   cx="50%"
                   cy="50%"
-                  outerRadius={110}
-                  label={(d) => d.name}
+                  outerRadius={100}
+                  label={(d) => {
+                    const total = totals.totalValue + totalPEValue + totalPrivateEquityValue + TOTAL_CASH;
+                    const pct = round2((d.value / total) * 100);
+                    return `${d.name} ${pct}%`;
+                  }}
                 >
                   {classWithStartupAndCash.map((entry, index) => (
                     <Cell
@@ -1003,17 +1005,11 @@ const projectedGain = useMemo(() => {
                   ))}
                 </Pie>
                 <ReTooltip
-                  formatter={(v, name) => [
-                    `${round2(
-                      (v /
-                        (totals.totalValue +
-                          totalPEValue +
-                          totalPrivateEquityValue +
-                          TOTAL_CASH)) *
-                        100
-                    )}%`,
-                    name,
-                  ]}
+                  formatter={(v, name) => {
+                    const total = totals.totalValue + totalPEValue + totalPrivateEquityValue + TOTAL_CASH;
+                    const pct = round2((v / total) * 100);
+                    return [`${formatCurrency(v)} (${pct}%)`, name];
+                  }}
                 />
               </PieChart>
             </ResponsiveContainer>

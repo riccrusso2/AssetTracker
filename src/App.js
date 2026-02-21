@@ -227,7 +227,7 @@ const getInitialStartups = () => [
   { id: cryptoRandomId(), name: "Fintower", invested: 300, fee: 24 },
   { id: cryptoRandomId(), name: "Epic Games", invested: 300, fee: 24 },
   { id: cryptoRandomId(), name: "Mega", invested: 300, fee: 24 },
-  { id: cryptoRandomId(), name: "Aalo Atomics", invented: 300, fee: 24 },
+  { id: cryptoRandomId(), name: "Aalo Atomics", invested: 300, fee: 24 },
   { id: cryptoRandomId(), name: "Topo", invested: 300, fee: 24 },
   { id: cryptoRandomId(), name: "Perplexity", invested: 300, fee: 24 },
 ];

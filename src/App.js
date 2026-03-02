@@ -44,8 +44,8 @@ const STORAGE_KEYS = {
   PRIVATE_EQUITY: "pf.privateequity.v1",
 };
 
-const MONTHLY_BUDGET = 1500;
-const TOTAL_CASH = 9800;
+const MONTHLY_BUDGET = 2000;
+const TOTAL_CASH = 9500;
 const AUTO_REFRESH_INTERVAL = 900000; // 15 minutes
 
 const DEFAULT_PROJECTION_YEARS = 10;
@@ -123,9 +123,9 @@ const getInitialAssets = () => [
     id: "swda",
     name: "iShares Core MSCI World UCITS ETF USD (Acc)",
     identifier: "IE00B4L5Y983",
-    quantity: 0 ,
+    quantity: 3 ,
     currency: "",
-    costBasis: 0,
+    costBasis: 113.786191,
     targetWeight: 3,
     lastPrice: null,
     lastUpdated: null,
@@ -135,9 +135,9 @@ const getInitialAssets = () => [
         id: "msciemimi",
         name: "iShares MSCI EM IMI ",
         identifier: "IE00BKM4GZ66",
-        quantity: 13,
+        quantity: 27,
         currency: "",
-        costBasis: 41.441,
+        costBasis: 42.2041,
         targetWeight: 5,
         lastPrice: null,
         lastUpdated: null,
@@ -147,9 +147,9 @@ const getInitialAssets = () => [
     id: "worldquality",
     name: "iShares Edge MSCI World Quality Factor UCITS ETF (Acc)",
     identifier: "IE00BP3QZ601",
-    quantity: 22,
+    quantity: 23,
     currency: "",
-    costBasis: 67.88818,
+    costBasis: 68.020433,
     targetWeight: 7,
     lastPrice: null,
     lastUpdated: null,
@@ -159,9 +159,9 @@ const getInitialAssets = () => [
     id: "worldmomentum",
     name: "iShares Edge MSCI World Momentum Factor UCITS ETF (Acc)",
     identifier: "IE00BP3QZ825",
-    quantity: 16,
+    quantity: 19,
     currency: "",
-    costBasis: 83.373125,
+    costBasis: 83.685259,
     targetWeight: 7,
     lastPrice: null,
     lastUpdated: null,
@@ -171,9 +171,9 @@ const getInitialAssets = () => [
     id: "worldvalue",
     name: "iShares Edge MSCI World Value Factor UCITS ETF (Acc)",
     identifier: "IE00BP3QZB59",
-    quantity: 26,
+    quantity: 28,
     currency: "",
-    costBasis: 50.469608,
+    costBasis: 50.865352,
     targetWeight: 7,
     lastPrice: null,
     lastUpdated: null,
@@ -195,9 +195,9 @@ const getInitialAssets = () => [
     id: "bitcoin",
     name: "Bitcoin",
     identifier: "XS2940466316",
-    quantity: 104,
+    quantity: 124,
     currency: "",
-    costBasis: 7.596277,
+    costBasis: 7.31836,
     targetWeight: 4,
     lastPrice: null,
     lastUpdated: null,
@@ -230,6 +230,7 @@ const getInitialStartups = () => [
   { id: cryptoRandomId(), name: "Aalo Atomics", invested: 300, fee: 24 },
   { id: cryptoRandomId(), name: "Topo", invested: 300, fee: 24 },
   { id: cryptoRandomId(), name: "Perplexity", invested: 300, fee: 24 },
+  { id: cryptoRandomId(), name: "Boardy", invested: 300, fee: 24 },
 ];
 
 const getInitialPrivateEquity = () => [

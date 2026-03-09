@@ -613,6 +613,14 @@ html, body {
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* =================== MISC =================== */
+/* =================== REBALANCING TOTAL ROW =================== */
+.data-table tfoot .total-row td {
+  padding: 12px 12px;
+  border-top: 2px solid var(--border2);
+  background: var(--bg-card2);
+  font-size: 14px;
+}
+
 .hint-text {
   font-size: 12px;
   color: var(--text-muted);

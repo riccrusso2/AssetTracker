@@ -185,30 +185,79 @@ const calcProjectionScenarios = (start, monthly, baseReturn, years) => {
 
 const calcRebalancing = (assets, totalVal, budget) => {
   if (!totalVal || totalVal <= 0) return { actions: [] };
+
   const sumTarget = assets.reduce((acc, a) => acc + (a.targetWeight || 0), 0) || 1;
   const norm = 100 / sumTarget;
+
   const actions = assets.map((a) => {
-    const cur  = (a.lastPrice || 0) * (a.quantity || 0);
-    const curW = (cur / totalVal) * 100;
-    const tgtW = (a.targetWeight || 0) * norm;
-    const delta = (tgtW / 100) * totalVal - cur;
+    const cur   = (a.lastPrice || 0) * (a.quantity || 0);
+    const curW  = (cur / totalVal) * 100;
+    const tgtW  = (a.targetWeight || 0) * norm;
+    const delta = (tgtW / 100) * totalVal - cur;          // positive = underweight
     const qty   = a.lastPrice ? delta / a.lastPrice : 0;
     return { ...a, curW, tgtW, delta, qty };
   });
-  // Smart budget allocation — prioritise underweight assets
-  const base  = actions.map((a) => (a.tgtW / 100) * budget);
-  const deltas = actions.map((a) => a.delta);
-  let buy = [...base];
-  let freed = 0;
-  buy = buy.map((amt, i) => { if (deltas[i] <= 0) { freed += amt; return 0; } return amt; });
-  const sumPos = actions.filter((_, i) => deltas[i] > 0).reduce((acc, _, i) => acc + deltas[i], 0);
-  if (sumPos > 0) buy = buy.map((amt, i) => deltas[i] > 0 ? amt + (freed * deltas[i]) / sumPos : amt);
-  buy = buy.map((amt, i) => deltas[i] > 0 && amt > deltas[i] ? deltas[i] : amt);
+
+  // --- Iterative proportional allocation with capping ---
+  // Only buy underweight assets. Redistribute any leftover from capped assets.
+  // Invariant: sum(buy) === budget at the end.
+  const buy = new Array(actions.length).fill(0);
+  let eligible = actions.map((_, i) => i).filter((i) => actions[i].delta > 0);
+  let remaining = budget;
+
+  for (let iter = 0; iter < 20 && eligible.length > 0 && remaining > 0.005; iter++) {
+    const sumEligTgt = eligible.reduce((acc, i) => acc + actions[i].tgtW, 0);
+    if (sumEligTgt <= 0) break;
+
+    const nextEligible = [];
+    let allocated = 0;
+
+    for (const i of eligible) {
+      const proportional = (actions[i].tgtW / sumEligTgt) * remaining;
+      const room         = actions[i].delta - buy[i];       // how much more we can buy
+
+      if (proportional >= room) {
+        // hit the cap — fill exactly to delta
+        buy[i]    = actions[i].delta;
+        allocated += room;
+        // do NOT add to nextEligible → this asset is done
+      } else {
+        buy[i]    += proportional;
+        allocated += proportional;
+        nextEligible.push(i);
+      }
+    }
+
+    remaining -= allocated;
+    eligible   = nextEligible;
+  }
+
+  // If budget > total underweight need, spread the leftover proportionally
+  // across ALL assets by target weight (buy more of anything, starting from most underweight)
+  if (remaining > 0.005) {
+    const sumAllTgt = actions.reduce((acc, a) => acc + a.tgtW, 0);
+    if (sumAllTgt > 0) {
+      actions.forEach((a, i) => {
+        buy[i] += (a.tgtW / sumAllTgt) * remaining;
+      });
+    }
+  }
+
+  // Fix any floating-point drift so sum(r2 values) === budget
+  // Adjust the largest allocation by the rounding error.
+  const rawBuys   = actions.map((_, i) => Math.max(0, buy[i] || 0));
+  const rounded   = rawBuys.map(r2);
+  const roundDiff = r2(budget - rounded.reduce((a, b) => a + b, 0));
+  if (Math.abs(roundDiff) > 0) {
+    const maxIdx  = rounded.indexOf(Math.max(...rounded));
+    rounded[maxIdx] = r2(rounded[maxIdx] + roundDiff);
+  }
+
   return {
     actions: actions.map((a, i) => ({
       ...a,
-      monthlyBuy: r2(Math.max(0, buy[i] || 0)),
-      monthlyQty: a.lastPrice && buy[i] > 0 ? r2(buy[i] / a.lastPrice) : 0,
+      monthlyBuy: rounded[i],
+      monthlyQty: a.lastPrice && rounded[i] > 0 ? r2(rounded[i] / a.lastPrice) : 0,
     })),
   };
 };
@@ -1073,6 +1122,26 @@ export default function App() {
                   <td className="num mono">{x.monthlyQty > 0 ? x.monthlyQty : "—"}</td>
                 </tr>
               ))}
+            <tfoot>
+              <tr className="total-row">
+                <td colSpan={5}><strong>Totale acquisto mensile</strong></td>
+                <td className="num mono">
+                  {(() => {
+                    const total = r2(rebalance.actions.reduce((acc, x) => acc + (x.monthlyBuy || 0), 0));
+                    const diff  = r2(Math.abs(total - monthBudget));
+                    return (
+                      <span className={diff > 0.02 ? "neg-text" : "pos-text"}>
+                        <strong>{fmt(total)}</strong>
+                        {diff > 0.02
+                          ? ` ⚠ (diff: ${fmt(diff)})`
+                          : " ✓"}
+                      </span>
+                    );
+                  })()}
+                </td>
+                <td/>
+              </tr>
+            </tfoot>
             </tbody>
           </table>
         </div>

@@ -1,4 +1,4 @@
-// App.js — Enhanced Portfolio Dashboard v2
+// App.js — Enhanced Portfolio Dashboard v2 + Storico prezzi
 import React, {
   useCallback, useEffect, useMemo, useRef, useState,
 } from "react";
@@ -12,7 +12,7 @@ import {
   BarChart2, LineChart as LineChartIcon, Target, Info, Trash2,
   Edit2, Moon, Sun, Download, Search, X, AlertTriangle,
   Activity, LayoutDashboard, Briefcase, Plus, CheckCircle,
-  Shield, ChevronUp, ChevronDown, Wallet,
+  Shield, ChevronUp, ChevronDown, Wallet, Clock,
 } from "lucide-react";
 import "./styles.css";
 
@@ -193,14 +193,11 @@ const calcRebalancing = (assets, totalVal, budget) => {
     const cur   = (a.lastPrice || 0) * (a.quantity || 0);
     const curW  = (cur / totalVal) * 100;
     const tgtW  = (a.targetWeight || 0) * norm;
-    const delta = (tgtW / 100) * totalVal - cur;          // positive = underweight
+    const delta = (tgtW / 100) * totalVal - cur;
     const qty   = a.lastPrice ? delta / a.lastPrice : 0;
     return { ...a, curW, tgtW, delta, qty };
   });
 
-  // --- Iterative proportional allocation with capping ---
-  // Only buy underweight assets. Redistribute any leftover from capped assets.
-  // Invariant: sum(buy) === budget at the end.
   const buy = new Array(actions.length).fill(0);
   let eligible = actions.map((_, i) => i).filter((i) => actions[i].delta > 0);
   let remaining = budget;
@@ -214,13 +211,11 @@ const calcRebalancing = (assets, totalVal, budget) => {
 
     for (const i of eligible) {
       const proportional = (actions[i].tgtW / sumEligTgt) * remaining;
-      const room         = actions[i].delta - buy[i];       // how much more we can buy
+      const room         = actions[i].delta - buy[i];
 
       if (proportional >= room) {
-        // hit the cap — fill exactly to delta
         buy[i]    = actions[i].delta;
         allocated += room;
-        // do NOT add to nextEligible → this asset is done
       } else {
         buy[i]    += proportional;
         allocated += proportional;
@@ -232,8 +227,6 @@ const calcRebalancing = (assets, totalVal, budget) => {
     eligible   = nextEligible;
   }
 
-  // If budget > total underweight need, spread the leftover proportionally
-  // across ALL assets by target weight (buy more of anything, starting from most underweight)
   if (remaining > 0.005) {
     const sumAllTgt = actions.reduce((acc, a) => acc + a.tgtW, 0);
     if (sumAllTgt > 0) {
@@ -243,8 +236,6 @@ const calcRebalancing = (assets, totalVal, budget) => {
     }
   }
 
-  // Fix any floating-point drift so sum(r2 values) === budget
-  // Adjust the largest allocation by the rounding error.
   const rawBuys   = actions.map((_, i) => Math.max(0, buy[i] || 0));
   const rounded   = rawBuys.map(r2);
   const roundDiff = r2(budget - rounded.reduce((a, b) => a + b, 0));
@@ -276,6 +267,65 @@ const exportCSV = (assets) => {
   a.href = URL.createObjectURL(blob);
   a.download = `portfolio_${new Date().toISOString().slice(0, 10)}.csv`;
   a.click();
+};
+
+// ====================== HISTORICAL CHART HELPERS ======================
+
+/** Parse whatever JustETF performance-chart returns into [{date, price}] */
+const parseJustETFSeries = (data) => {
+  if (!data) return [];
+
+  // Format A: { series: [{date:"2024-01-02", value:{raw:100.5}}] }
+  if (data.series && Array.isArray(data.series)) {
+    return data.series.map((p) => {
+      const raw = typeof p.value === "object" ? p.value?.raw : p.value;
+      return { date: String(p.date), price: parseFloat(raw) };
+    }).filter((p) => p.date && !Number.isNaN(p.price));
+  }
+
+  // Format B: [[timestamp_ms, value], ...]
+  if (Array.isArray(data)) {
+    return data.map((p) => {
+      if (!Array.isArray(p)) return null;
+      const date = new Date(p[0]).toISOString().slice(0, 10);
+      return { date, price: parseFloat(p[1]) };
+    }).filter((p) => p && !Number.isNaN(p.price));
+  }
+
+  // Format C: { prices: [{t:"2024-01-02", c:100.5}] }
+  if (data.prices && Array.isArray(data.prices)) {
+    return data.prices.map((p) => ({
+      date: String(p.t || p.date),
+      price: parseFloat(p.c || p.close || p.value),
+    })).filter((p) => p.date && !Number.isNaN(p.price));
+  }
+
+  return [];
+};
+
+/** Resample a sorted date array to weekly / monthly (last date of each bucket) */
+const sampleDates = (sortedDates, granularity) => {
+  if (granularity === "day") return sortedDates;
+  const map = {};
+  sortedDates.forEach((d) => {
+    const key = granularity === "month"
+      ? d.slice(0, 7)                          // YYYY-MM
+      : (() => {
+          const dt  = new Date(d + "T00:00:00");
+          const jan = new Date(dt.getFullYear(), 0, 1);
+          const wk  = Math.ceil(((dt - jan) / 86_400_000 + jan.getDay() + 1) / 7);
+          return `${dt.getFullYear()}-W${String(wk).padStart(2, "0")}`;
+        })();
+    map[key] = d;                              // keeps last date of the bucket
+  });
+  return Object.values(map).sort();
+};
+
+const fmtDateLabel = (dateStr, granularity) => {
+  const dt = new Date(dateStr + "T00:00:00");
+  if (granularity === "month")
+    return dt.toLocaleDateString("it-IT", { month: "short", year: "2-digit" });
+  return dt.toLocaleDateString("it-IT", { day: "numeric", month: "short" });
 };
 
 // ====================== INITIAL DATA ======================
@@ -335,6 +385,7 @@ const getInitialPE = () => [
 // ====================== COLORS ======================
 const PALETTE = ["#3b82f6","#10b981","#f59e0b","#ef4444","#8b5cf6",
                  "#14b8a6","#f97316","#22c55e","#e879f9","#60a5fa"];
+const PORTFOLIO_COLOR = "#ffffff";
 
 // ====================== COMPONENTS ======================
 
@@ -458,6 +509,29 @@ const CustomTooltip = ({ active, payload, label, currency = true }) => {
   );
 };
 
+// ---- Historical chart tooltip ----
+const HistTooltip = ({ active, payload, label, mode }) => {
+  if (!active || !payload?.length) return null;
+  const sorted = [...payload]
+    .filter((p) => p.value != null)
+    .sort((a, b) => (b.value || 0) - (a.value || 0));
+  return (
+    <div className="chart-tooltip hist-tooltip">
+      <div className="tooltip-label">{label}</div>
+      {sorted.map((p, i) => (
+        <div key={i} className="tooltip-row">
+          <span style={{ color: p.color }}>{p.name}</span>
+          <span className={mode === "perf" ? (p.value >= 0 ? "pos-text" : "neg-text") : ""}>
+            {mode === "perf"
+              ? `${p.value >= 0 ? "+" : ""}${p.value?.toFixed(2)}%`
+              : fmt(p.value)}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
 // ====================== HOOKS ======================
 const useLS = (key, init) => {
   const [v, setV] = useState(() => ls.get(key, init));
@@ -497,10 +571,11 @@ const usePriceFetcher = () => {
 
 // ====================== TABS ======================
 const TABS = [
-  { id: "overview",       label: "Overview",      icon: LayoutDashboard },
-  { id: "portfolio",      label: "Portafoglio",   icon: Briefcase },
-  { id: "analytics",      label: "Analisi",       icon: BarChart2 },
-  { id: "projection",     label: "Proiezione",    icon: LineChartIcon },
+  { id: "overview",       label: "Overview",        icon: LayoutDashboard },
+  { id: "portfolio",      label: "Portafoglio",     icon: Briefcase },
+  { id: "analytics",      label: "Analisi",         icon: BarChart2 },
+  { id: "storico",        label: "Storico prezzi",  icon: Clock },
+  { id: "projection",     label: "Proiezione",      icon: LineChartIcon },
   { id: "rebalancing",    label: "Ribilanciamento", icon: Target },
 ];
 
@@ -514,12 +589,22 @@ export default function App() {
   const [history,      setHist]   = useLS(STORAGE_KEYS.HISTORY,   []);
   const [tab,          setTab]    = useState("overview");
   const [search,       setSearch] = useState("");
-  const [modal,        setModal]  = useState(null); // null | {asset} | {}
+  const [modal,        setModal]  = useState(null);
   const [projYears,    setProjY]  = useState(5);
   const [projReturn,   setProjR]  = useState(7);
   const [projMonthly,  setProjM]  = useState(1000);
   const [monthBudget,  setBudget] = useState(1500);
   const [totalCash]               = useState(9_500);
+
+  // ---- Storico state ----
+  const [histPrices,   setHistPrices]  = useState({});       // { assetId: [{date, price}] }
+  const [histRange,    setHistRange]   = useState("1y");     // 1m | 3m | 6m | 1y | 3y
+  const [histGran,     setHistGran]    = useState("week");   // day | week | month
+  const [histMode,     setHistMode]    = useState("perf");   // perf | value
+  const [histLoading,  setHistLoading] = useState(false);
+  const [histError,    setHistError]   = useState(null);
+  const [hiddenLines,  setHiddenLines] = useState(new Set());
+  const histFetchedRange = useRef(null); // track last fetched range to avoid re-fetch
 
   const { fetchOne, loading, error } = usePriceFetcher();
   const assetsRef = useRef(assets);
@@ -608,6 +693,136 @@ export default function App() {
     [assets, search]
   );
 
+  // ---- Historical data: fetch ----
+  const fetchHistoricalData = useCallback(async () => {
+    setHistLoading(true);
+    setHistError(null);
+    histFetchedRange.current = histRange;
+
+    const fetchable = assetsRef.current.filter(
+      (a) => !a.manual && isISIN((a.identifier || "").trim())
+    );
+
+    const results = {};
+    await Promise.all(fetchable.map(async (a) => {
+      try {
+        const res = await fetch(
+          `/api/history?isin=${encodeURIComponent(a.identifier.trim())}&range=${histRange}`
+        );
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        results[a.id] = parseJustETFSeries(data);
+      } catch (e) {
+        console.warn(`History fetch failed for ${a.identifier}:`, e.message);
+        results[a.id] = [];
+      }
+    }));
+
+    setHistPrices(results);
+    setHistLoading(false);
+  }, [histRange]);
+
+  // Fetch when storico tab is opened or range changes
+  useEffect(() => {
+    if (tab === "storico" && histFetchedRange.current !== histRange) {
+      fetchHistoricalData();
+    }
+  }, [tab, histRange, fetchHistoricalData]);
+
+  // Also fetch once on first open
+  useEffect(() => {
+    if (tab === "storico" && Object.keys(histPrices).length === 0 && !histLoading) {
+      fetchHistoricalData();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
+
+  // ---- Historical chart data ----
+  const histChartData = useMemo(() => {
+    const assetIds = Object.keys(histPrices).filter((id) => histPrices[id]?.length > 0);
+    if (assetIds.length === 0) return [];
+
+    // Build per-asset date→price maps
+    const priceMap = {};   // { assetId: { date: price } }
+    const allDatesSet = new Set();
+
+    assets.forEach((a) => {
+      if (!histPrices[a.id]?.length) return;
+      priceMap[a.id] = {};
+      histPrices[a.id].forEach(({ date, price }) => {
+        priceMap[a.id][date] = price;
+        allDatesSet.add(date);
+      });
+    });
+
+    const allDates = [...allDatesSet].sort();
+    if (allDates.length === 0) return [];
+
+    // Forward-fill prices so every sampled date has a value
+    const ffMap = {};   // { assetId: { date: price } }
+    assets.forEach((a) => {
+      if (!priceMap[a.id]) return;
+      ffMap[a.id] = {};
+      let last = null;
+      allDates.forEach((d) => {
+        if (priceMap[a.id][d] != null) last = priceMap[a.id][d];
+        if (last != null) ffMap[a.id][d] = last;
+      });
+    });
+
+    // Sample dates
+    const sampled = sampleDates(allDates, histGran);
+
+    // Initial prices (first date) for normalisation
+    const initPrice = {};
+    assets.forEach((a) => {
+      if (histPrices[a.id]?.length) initPrice[a.id] = histPrices[a.id][0].price;
+    });
+
+    // Initial portfolio value
+    const initPortVal = assets.reduce(
+      (acc, a) => acc + (initPrice[a.id] || 0) * (a.quantity || 0), 0
+    );
+
+    return sampled.map((date) => {
+      const row = { label: fmtDateLabel(date, histGran), _date: date };
+      let portVal = 0;
+      let hasData = false;
+
+      assets.forEach((a) => {
+        const price = ffMap[a.id]?.[date];
+        if (price == null) return;
+        hasData = true;
+
+        if (histMode === "perf") {
+          const init = initPrice[a.id];
+          if (init) row[a.id] = r2(((price - init) / init) * 100);
+        } else {
+          row[a.id] = r2(price * (a.quantity || 0));
+        }
+        portVal += price * (a.quantity || 0);
+      });
+
+      if (hasData) {
+        if (histMode === "perf") {
+          if (initPortVal > 0)
+            row["__portfolio__"] = r2(((portVal - initPortVal) / initPortVal) * 100);
+        } else {
+          row["__portfolio__"] = r2(portVal);
+        }
+      }
+
+      return row;
+    });
+  }, [histPrices, assets, histGran, histMode]);
+
+  // Assets that actually returned historical data
+  const assetsWithHistory = useMemo(() =>
+    assets.filter((a) => histPrices[a.id]?.length > 0),
+    [assets, histPrices]
+  );
+
   // ---- Actions ----
   const fetchAllPrices = useCallback(async () => {
     const updated = await Promise.all(
@@ -644,19 +859,24 @@ export default function App() {
 
   const isLoading = Object.keys(loading).length > 0;
 
-  // ---- Render helpers ----
   const tabLoading = isLoading && (
     <span className="loading-dot-row">
       <span className="loading-dot"/><span className="loading-dot"/><span className="loading-dot"/>
     </span>
   );
 
+  const toggleLine = (id) =>
+    setHiddenLines((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+
   // ====================== TABS CONTENT ======================
 
   // --- OVERVIEW ---
   const renderOverview = () => (
     <div className="tab-content">
-      {/* KPI row */}
       <div className="grid-4">
         <KpiCard label="Totale portafoglio" value={fmt(grandTotal, true)} icon={Wallet}
           sub={`Liquidità: ${fmt(totalCash)}`} color="blue" />
@@ -673,7 +893,6 @@ export default function App() {
           icon={Target} />
       </div>
 
-      {/* Risk metrics */}
       {history.length > 2 && (
         <div className="section-card">
           <h3 className="section-title"><Shield size={16}/> Metriche di rischio</h3>
@@ -703,7 +922,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Best / Worst / Totale */}
       <div className="grid-3">
         <div className="section-card">
           <h3 className="section-title"><TrendingUp size={16}/> Miglior performer</h3>
@@ -732,7 +950,6 @@ export default function App() {
         </div>
       </div>
 
-      {/* Charts row */}
       <div className="grid-2">
         <div className="section-card">
           <h3 className="section-title"><PieChartIcon size={16}/> Asset allocation (incl. Liquidità)</h3>
@@ -785,7 +1002,6 @@ export default function App() {
   // --- PORTFOLIO ---
   const renderPortfolio = () => (
     <div className="tab-content">
-      {/* Controls */}
       <div className="table-controls">
         <div className="search-wrap">
           <Search size={15} className="search-icon"/>
@@ -803,7 +1019,6 @@ export default function App() {
         </div>
       </div>
 
-      {/* Assets table */}
       <div className="section-card">
         <h2 className="section-title"><Briefcase size={16}/> ETF & Asset quotati</h2>
         <span className="muted" style={{ fontSize: 13 }}>Totale: <strong>{fmt(totals.val)}</strong></span>
@@ -811,18 +1026,11 @@ export default function App() {
           <table className="data-table">
             <thead>
               <tr>
-                <th>Nome</th>
-                <th>ISIN</th>
-                <th className="num">Quantità</th>
-                <th className="num">P. Acquisto</th>
-                <th className="num">P. Attuale</th>
-                <th className="num">Valore</th>
-                <th className="num">Perf €</th>
-                <th className="num">Perf %</th>
-                <th className="num">Peso</th>
-                <th className="num">Target</th>
-                <th>Classe</th>
-                <th></th>
+                <th>Nome</th><th>ISIN</th><th className="num">Quantità</th>
+                <th className="num">P. Acquisto</th><th className="num">P. Attuale</th>
+                <th className="num">Valore</th><th className="num">Perf €</th>
+                <th className="num">Perf %</th><th className="num">Peso</th>
+                <th className="num">Target</th><th>Classe</th><th></th>
               </tr>
             </thead>
             <tbody>
@@ -868,7 +1076,6 @@ export default function App() {
         </div>
       </div>
 
-      {/* Startup table */}
       <div className="section-card">
         <h2 className="section-title"><Activity size={16}/> Investimenti Startup</h2>
         <div className="kpi-mini-row">
@@ -895,7 +1102,6 @@ export default function App() {
         </div>
       </div>
 
-      {/* PE table */}
       <div className="section-card">
         <h2 className="section-title"><Shield size={16}/> Private Equity (ELTIF)</h2>
         <span className="muted" style={{ fontSize: 13 }}>Totale: <strong>{fmt(peTotal)}</strong></span>
@@ -964,7 +1170,6 @@ export default function App() {
         </div>
       </div>
 
-      {/* Drift meter */}
       <div className="section-card">
         <h3 className="section-title"><Activity size={16}/> Indice di drift portafoglio</h3>
         <div className="drift-meter">
@@ -978,16 +1183,13 @@ export default function App() {
           </div>
         </div>
         <p className="hint-text">
-          {drift < 5
-            ? "✓ Il portafoglio è ben allineato con i target."
-            : drift < 15
-              ? "⚠ Leggero drift: considera un piccolo ribilanciamento."
+          {drift < 5 ? "✓ Il portafoglio è ben allineato con i target."
+            : drift < 15 ? "⚠ Leggero drift: considera un piccolo ribilanciamento."
               : "🚨 Drift elevato: ribilanciamento consigliato."}
           {" "}Drift totale = somma degli scostamenti assoluti tra peso attuale e target.
         </p>
       </div>
 
-      {/* Asset class donut */}
       <div className="section-card">
         <h3 className="section-title"><PieChartIcon size={16}/> Distribuzione per asset class (solo ETF & Asset quotati)</h3>
         <div style={{ height: 260 }}>
@@ -1005,6 +1207,204 @@ export default function App() {
       </div>
     </div>
   );
+
+  // --- STORICO PREZZI ---
+  const renderStorico = () => {
+    const ranges = [
+      { id: "1m", label: "1M" }, { id: "3m", label: "3M" }, { id: "6m", label: "6M" },
+      { id: "1y", label: "1A" }, { id: "3y", label: "3A" },
+    ];
+    const grans = [
+      { id: "day",   label: "Giornaliero" },
+      { id: "week",  label: "Settimanale" },
+      { id: "month", label: "Mensile" },
+    ];
+
+    const noData = !histLoading && histChartData.length === 0;
+    const hasPortfolioLine = histChartData.some((d) => d["__portfolio__"] != null);
+
+    return (
+      <div className="tab-content">
+        <div className="section-card">
+          <div className="hist-toolbar">
+            {/* Range */}
+            <div className="seg-group">
+              {ranges.map((r) => (
+                <button key={r.id}
+                  className={`seg-btn ${histRange === r.id ? "seg-active" : ""}`}
+                  onClick={() => setHistRange(r.id)}>
+                  {r.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Granularity */}
+            <div className="seg-group">
+              {grans.map((g) => (
+                <button key={g.id}
+                  className={`seg-btn ${histGran === g.id ? "seg-active" : ""}`}
+                  onClick={() => setHistGran(g.id)}>
+                  {g.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Mode */}
+            <div className="seg-group">
+              <button className={`seg-btn ${histMode === "perf" ? "seg-active" : ""}`}
+                onClick={() => setHistMode("perf")}>Performance %</button>
+              <button className={`seg-btn ${histMode === "value" ? "seg-active" : ""}`}
+                onClick={() => setHistMode("value")}>Valore €</button>
+            </div>
+
+            <button className="btn btn-ghost" onClick={fetchHistoricalData} disabled={histLoading}
+              title="Ricarica dati storici">
+              <RefreshCw size={14} className={histLoading ? "spin" : ""} />
+              {histLoading ? "Caricamento…" : "Aggiorna"}
+            </button>
+          </div>
+
+          {/* Error */}
+          {histError && (
+            <div className="alert alert-amber" style={{ marginTop: 12 }}>
+              <AlertTriangle size={14}/> {histError}
+            </div>
+          )}
+
+          {/* Legend chips */}
+          {!histLoading && assetsWithHistory.length > 0 && (
+            <div className="legend-chips">
+              {assetsWithHistory.map((a, i) => (
+                <button key={a.id}
+                  className={`legend-chip ${hiddenLines.has(a.id) ? "chip-hidden" : ""}`}
+                  style={{ "--chip-color": PALETTE[i % PALETTE.length] }}
+                  onClick={() => toggleLine(a.id)}
+                  title={a.identifier}>
+                  <span className="chip-dot"/>
+                  {a.name.split(" ").slice(0, 4).join(" ")}
+                </button>
+              ))}
+              {hasPortfolioLine && (
+                <button
+                  className={`legend-chip chip-portfolio ${hiddenLines.has("__portfolio__") ? "chip-hidden" : ""}`}
+                  style={{ "--chip-color": PORTFOLIO_COLOR }}
+                  onClick={() => toggleLine("__portfolio__")}>
+                  <span className="chip-dot"/>
+                  Portafoglio totale
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Chart */}
+          {histLoading ? (
+            <div className="hist-loading">
+              <span className="loading-dot-row" style={{ justifyContent: "center" }}>
+                <span className="loading-dot"/>
+                <span className="loading-dot"/>
+                <span className="loading-dot"/>
+              </span>
+              <span style={{ marginTop: 12, color: "var(--text-muted)", fontSize: 14 }}>
+                Caricamento dati storici per {assets.filter((a) => isISIN(a.identifier)).length} asset…
+              </span>
+            </div>
+          ) : noData ? (
+            <div className="hist-loading">
+              <AlertTriangle size={28} style={{ color: "var(--amber)", marginBottom: 8 }}/>
+              <span style={{ color: "var(--text-muted)", fontSize: 14 }}>
+                Nessun dato disponibile. Verifica la connessione al server o prova un range diverso.
+              </span>
+            </div>
+          ) : (
+            <div style={{ height: 460, marginTop: 16 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={histChartData} margin={{ top: 5, right: 20, bottom: 5, left: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fontSize: 11 }}
+                    stroke="var(--text-muted)"
+                    interval="preserveStartEnd"
+                  />
+                  <YAxis
+                    tickFormatter={histMode === "perf"
+                      ? (v) => `${v >= 0 ? "+" : ""}${v.toFixed(0)}%`
+                      : (v) => `€${(v / 1000).toFixed(0)}k`
+                    }
+                    tick={{ fontSize: 11 }}
+                    stroke="var(--text-muted)"
+                    width={60}
+                  />
+                  <ReTooltip content={<HistTooltip mode={histMode} />} />
+                  {histMode === "perf" && (
+                    <ReferenceLine y={0} stroke="var(--text-muted)" strokeDasharray="5 3" strokeWidth={1}/>
+                  )}
+
+                  {/* Asset lines */}
+                  {assetsWithHistory.map((a, i) =>
+                    hiddenLines.has(a.id) ? null : (
+                      <Line
+                        key={a.id}
+                        type="monotone"
+                        dataKey={a.id}
+                        name={a.name.split(" ").slice(0, 4).join(" ")}
+                        stroke={PALETTE[i % PALETTE.length]}
+                        strokeWidth={1.5}
+                        dot={false}
+                        connectNulls
+                        activeDot={{ r: 4 }}
+                      />
+                    )
+                  )}
+
+                  {/* Portfolio total line */}
+                  {hasPortfolioLine && !hiddenLines.has("__portfolio__") && (
+                    <Line
+                      type="monotone"
+                      dataKey="__portfolio__"
+                      name="Portafoglio totale"
+                      stroke={PORTFOLIO_COLOR}
+                      strokeWidth={2.5}
+                      dot={false}
+                      connectNulls
+                      strokeDasharray="8 4"
+                      activeDot={{ r: 5 }}
+                    />
+                  )}
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {/* Stats row */}
+          {!histLoading && assetsWithHistory.length > 0 && (
+            <div className="hist-stats-row">
+              {assetsWithHistory.map((a, i) => {
+                const series = histPrices[a.id] || [];
+                if (series.length < 2) return null;
+                const first = series[0].price;
+                const last  = series[series.length - 1].price;
+                const perf  = r2(((last - first) / first) * 100);
+                return (
+                  <div key={a.id} className="hist-stat-chip">
+                    <span className="hist-stat-dot" style={{ background: PALETTE[i % PALETTE.length] }}/>
+                    <span className="hist-stat-name">{a.name.split(" ").slice(0, 3).join(" ")}</span>
+                    <Badge value={perf}/>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <p className="hint-text" style={{ marginTop: 8 }}>
+            Dati storici provenienti da JustETF. Gli asset senza ISIN valido o non presenti su JustETF
+            non vengono visualizzati. La linea tratteggiata bianca rappresenta l'andamento del portafoglio
+            totale (somma pesata per le quantità detenute).
+          </p>
+        </div>
+      </div>
+    );
+  };
 
   // --- PROJECTION ---
   const renderProjection = () => (
@@ -1041,11 +1441,7 @@ export default function App() {
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={projData}>
               <defs>
-                {[
-                  { id: "gOpt",  color: "#10b981" },
-                  { id: "gBase", color: "#3b82f6" },
-                  { id: "gPess", color: "#f59e0b" },
-                ].map(({ id, color }) => (
+                {[{ id: "gOpt", color: "#10b981" }, { id: "gBase", color: "#3b82f6" }, { id: "gPess", color: "#f59e0b" }].map(({ id, color }) => (
                   <linearGradient key={id} id={id} x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%"  stopColor={color} stopOpacity={0.2}/>
                     <stop offset="95%" stopColor={color} stopOpacity={0}/>
@@ -1099,12 +1495,9 @@ export default function App() {
           <table className="data-table">
             <thead>
               <tr>
-                <th>Asset</th>
-                <th className="num">Peso attuale</th>
-                <th className="num">Target (norm.)</th>
-                <th className="num">Delta €</th>
-                <th className="num">Qty Δ</th>
-                <th className="num">Acquisto mese</th>
+                <th>Asset</th><th className="num">Peso attuale</th>
+                <th className="num">Target (norm.)</th><th className="num">Delta €</th>
+                <th className="num">Qty Δ</th><th className="num">Acquisto mese</th>
                 <th className="num">Qty acquisto</th>
               </tr>
             </thead>
@@ -1132,9 +1525,7 @@ export default function App() {
                     return (
                       <span className={diff > 0.02 ? "neg-text" : "pos-text"}>
                         <strong>{fmt(total)}</strong>
-                        {diff > 0.02
-                          ? ` ⚠ (diff: ${fmt(diff)})`
-                          : " ✓"}
+                        {diff > 0.02 ? ` ⚠ (diff: ${fmt(diff)})` : " ✓"}
                       </span>
                     );
                   })()}
@@ -1156,7 +1547,6 @@ export default function App() {
   // ====================== RENDER ======================
   return (
     <div className={`app ${dark ? "dark" : "light"}`}>
-      {/* HEADER */}
       <header className="app-header">
         <div className="header-left">
           <div className="logo-mark">PF</div>
@@ -1184,14 +1574,12 @@ export default function App() {
         </div>
       </header>
 
-      {/* ERROR BANNER */}
       {error && (
         <div className="alert alert-red mx-4">
           <AlertTriangle size={14}/> {error}
         </div>
       )}
 
-      {/* TABS */}
       <nav className="tab-bar">
         {TABS.map((t) => {
           const Icon = t.icon;
@@ -1204,16 +1592,15 @@ export default function App() {
         })}
       </nav>
 
-      {/* CONTENT */}
       <main className="app-main">
         {tab === "overview"    && renderOverview()}
         {tab === "portfolio"   && renderPortfolio()}
         {tab === "analytics"   && renderAnalytics()}
+        {tab === "storico"     && renderStorico()}
         {tab === "projection"  && renderProjection()}
         {tab === "rebalancing" && renderRebalancing()}
       </main>
 
-      {/* MODAL */}
       {modal !== null && (
         <AssetModal
           asset={modal?.id ? modal : null}

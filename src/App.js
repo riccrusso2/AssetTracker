@@ -296,13 +296,13 @@ const getInitialAssets = () => [
     lastUpdated: null, assetClass: "ETF", currency: "EUR" },
   { id: "worldquality", name: "iShares MSCI World Quality Factor (Acc)", identifier: "IE00BP3QZ601",
     quantity: 23, costBasis: 68.020433, targetWeight: 7, lastPrice: null,
-    lastUpdated: null, assetClass: "ETF", currency: "EUR" },
+    lastUpdated: null, assetClass: "ETF", currency: "EUR", chartLabel: "MSCI Quality" },
   { id: "worldmomentum", name: "iShares MSCI World Momentum Factor (Acc)", identifier: "IE00BP3QZ825",
     quantity: 19, costBasis: 83.685259, targetWeight: 7, lastPrice: null,
-    lastUpdated: null, assetClass: "ETF", currency: "EUR" },
+    lastUpdated: null, assetClass: "ETF", currency: "EUR", chartLabel: "MSCI Momentum" },
   { id: "worldvalue", name: "iShares MSCI World Value Factor (Acc)", identifier: "IE00BP3QZB59",
     quantity: 28, costBasis: 50.865352, targetWeight: 7, lastPrice: null,
-    lastUpdated: null, assetClass: "ETF", currency: "EUR" },
+    lastUpdated: null, assetClass: "ETF", currency: "EUR", chartLabel: "MSCI Value" },
   { id: "gold", name: "Physical Gold USD (Acc)", identifier: "IE00B4ND3602",
     quantity: 27.524299, costBasis: 58.64, targetWeight: 10, lastPrice: null,
     lastUpdated: null, assetClass: "Commodity", currency: "EUR" },
@@ -757,7 +757,9 @@ export default function App() {
 
   const assetNameMap = useMemo(() => {
     const m = {};
-    assets.forEach((a) => { m[a.id] = a.name.split(" ").slice(0, 3).join(" "); });
+    assets.forEach((a) => {
+      m[a.id] = a.chartLabel || a.name.split(" ").slice(0, 3).join(" ");
+    });
     return m;
   }, [assets]);
 
@@ -825,7 +827,7 @@ export default function App() {
     const label = `${MONTH_LABELS_IT[month - 1]} ${year}`;
     const snapshotData = {
       label, month, year,
-      totalValue: r2(totals.val),
+      totalValue: r2(grandTotal),
       assets: assets.filter((a) => a.lastPrice).map((a) => ({
         id: a.id, name: a.name, price: a.lastPrice,
         quantity: a.quantity, value: r2((a.lastPrice || 0) * (a.quantity || 0)),
@@ -850,7 +852,7 @@ export default function App() {
       setSnapshotSaving(false);
       setTimeout(() => setSnapshotMsg(null), 5000);
     }
-  }, [assets, totals.val]);
+  }, [assets, totals.val, grandTotal]);
 
   const exportSnapshotsFile = useCallback(() => {
     const blob = new Blob([JSON.stringify(snapshots, null, 2)], { type: "application/json" });

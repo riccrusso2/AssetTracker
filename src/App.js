@@ -1,4 +1,4 @@
-// App.js — Portfolio Dashboard — v3 (snapshot chart)
+// App.js — Portfolio Dashboard — v4 (full frontend config)
 import React, {
   useCallback, useEffect, useMemo, useRef, useState,
 } from "react";
@@ -12,7 +12,8 @@ import {
   BarChart2, LineChart as LineChartIcon, Target, Info, Trash2,
   Edit2, Moon, Sun, Download, Search, X, AlertTriangle,
   Activity, LayoutDashboard, Briefcase, Plus, CheckCircle,
-  Shield, ChevronUp, ChevronDown, Wallet, Camera,
+  Shield, ChevronUp, ChevronDown, Wallet, Camera, Upload,
+  Settings,
 } from "lucide-react";
 import "./styles.css";
 
@@ -22,8 +23,10 @@ const STORAGE_KEYS = {
   STARTUP:        "pf.startup.v2",
   PRIVATE_EQUITY: "pf.pe.v2",
   DARK_MODE:      "pf.dark.v1",
+  CASH:           "pf.cash.v1",
 };
 
+const CONFIG_VERSION = 1;
 const AUTO_REFRESH_MS = 900_000; // 15 min
 
 const MONTH_LABELS_IT = [
@@ -114,15 +117,6 @@ const calcSortino = (history, rf = 0.03) => {
 };
 
 // ====================== SNAPSHOT HELPERS ======================
-
-/**
- * Trasforma un array di snapshot in dati per il LineChart.
- * Tutte le serie vengono normalizzate a 100 al primo snapshot
- * in modo da essere confrontabili su un'unica scala Y.
- *
- * Ogni punto ha la forma:
- *   { label: "Mar 2025", total: 112.3, "ftseallworld": 108.7, ... }
- */
 const buildChartData = (snapshots) => {
   if (!snapshots.length) return { data: [], assetIds: [] };
 
@@ -131,23 +125,17 @@ const buildChartData = (snapshots) => {
   const baseByAssetId = {};
   (base.assets || []).forEach((a) => { baseByAssetId[a.id] = a.price || 1; });
 
-  // Raccoglie tutti gli assetId presenti nei snapshot
   const assetIdSet = new Set();
   snapshots.forEach((s) => (s.assets || []).forEach((a) => assetIdSet.add(a.id)));
   const assetIds = [...assetIdSet];
 
   const data = snapshots.map((snap) => {
     const point = { label: snap.label };
-
-    // Portfolio totale indicizzato
     point["__total__"] = r2(((snap.totalValue || 0) / baseTotal) * 100);
-
-    // Ogni asset indicizzato
     (snap.assets || []).forEach((a) => {
       const b = baseByAssetId[a.id] || a.price || 1;
       point[a.id] = r2(((a.price || 0) / b) * 100);
     });
-
     return point;
   });
 
@@ -237,14 +225,11 @@ const calcRebalancing = (assets, totalVal, budget) => {
   for (let iter = 0; iter < 20 && eligible.length > 0 && remaining > 0.005; iter++) {
     const sumEligTgt = eligible.reduce((acc, i) => acc + actions[i].tgtW, 0);
     if (sumEligTgt <= 0) break;
-
     const nextEligible = [];
     let allocated = 0;
-
     for (const i of eligible) {
       const proportional = (actions[i].tgtW / sumEligTgt) * remaining;
       const room         = actions[i].delta - buy[i];
-
       if (proportional >= room) {
         buy[i]    = actions[i].delta;
         allocated += room;
@@ -254,7 +239,6 @@ const calcRebalancing = (assets, totalVal, budget) => {
         nextEligible.push(i);
       }
     }
-
     remaining -= allocated;
     eligible   = nextEligible;
   }
@@ -357,7 +341,6 @@ const getInitialPE = () => [
 const PALETTE = ["#3b82f6","#10b981","#f59e0b","#ef4444","#8b5cf6",
                  "#14b8a6","#f97316","#22c55e","#e879f9","#60a5fa"];
 
-// Colore fisso per la linea "Portafoglio totale"
 const TOTAL_LINE_COLOR = "#ffffff";
 const TOTAL_LINE_COLOR_LIGHT = "#1e293b";
 
@@ -400,7 +383,7 @@ const RiskCard = ({ label, value, fmt: fmtFn, tooltip, quality }) => {
   );
 };
 
-// ---- Modal per aggiunta/modifica asset ----
+// ---- Modal ETF / Asset ----
 const AssetModal = ({ asset, onSave, onClose }) => {
   const [form, setForm] = useState(asset || {
     name: "", identifier: "", quantity: "", costBasis: "",
@@ -432,11 +415,11 @@ const AssetModal = ({ asset, onSave, onClose }) => {
         </div>
         <div className="modal-body">
           {[
-            { label: "Nome",               key: "name",         type: "text" },
-            { label: "ISIN / Ticker",       key: "identifier",   type: "text" },
-            { label: "Quantità",            key: "quantity",     type: "number" },
-            { label: "Prezzo medio carico (€)", key: "costBasis",type: "number" },
-            { label: "Peso target (%)",     key: "targetWeight", type: "number" },
+            { label: "Nome",                    key: "name",         type: "text" },
+            { label: "ISIN / Ticker",           key: "identifier",   type: "text" },
+            { label: "Quantità",                key: "quantity",     type: "number" },
+            { label: "Prezzo medio carico (€)", key: "costBasis",    type: "number" },
+            { label: "Peso target (%)",         key: "targetWeight", type: "number" },
           ].map(({ label, key, type }) => (
             <label key={key} className="field-label">
               {label}
@@ -467,6 +450,111 @@ const AssetModal = ({ asset, onSave, onClose }) => {
   );
 };
 
+// ---- Modal Startup ----
+const StartupModal = ({ startup, onSave, onClose }) => {
+  const [form, setForm] = useState(startup || { name: "", invested: "", fee: "" });
+  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+
+  const handleSave = () => {
+    if (!form.name || !form.invested) return;
+    onSave({
+      id:       form.id || uid(),
+      name:     form.name,
+      invested: parseFloat(form.invested) || 0,
+      fee:      parseFloat(form.fee)      || 0,
+    });
+    onClose();
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3>{startup?.id ? "Modifica startup" : "Aggiungi startup"}</h3>
+          <button className="icon-btn" onClick={onClose}><X size={18}/></button>
+        </div>
+        <div className="modal-body">
+          <label className="field-label">
+            Nome
+            <input type="text" value={form.name} onChange={(e) => set("name", e.target.value)} className="field-input"/>
+          </label>
+          <label className="field-label">
+            Importo investito (€)
+            <input type="number" step="any" value={form.invested} onChange={(e) => set("invested", e.target.value)} className="field-input"/>
+          </label>
+          <label className="field-label">
+            Commissioni (€)
+            <input type="number" step="any" value={form.fee} onChange={(e) => set("fee", e.target.value)} className="field-input"/>
+          </label>
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-ghost" onClick={onClose}>Annulla</button>
+          <button className="btn btn-primary" onClick={handleSave} disabled={!form.name || !form.invested}>
+            <CheckCircle size={15}/> Salva
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ---- Modal Private Equity ----
+const PEModal = ({ pe, onSave, onClose }) => {
+  const [form, setForm] = useState(pe || { name: "", identifier: "", costBasis: "", lastPrice: "" });
+  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+
+  const handleSave = () => {
+    if (!form.name || !form.costBasis) return;
+    onSave({
+      id:          form.id || uid(),
+      name:        form.name,
+      identifier:  form.identifier || "",
+      costBasis:   parseFloat(form.costBasis)  || 0,
+      lastPrice:   parseFloat(form.lastPrice)  || parseFloat(form.costBasis) || 0,
+      targetWeight: 0,
+      assetClass:  "Private Equity",
+      manual:      true,
+    });
+    onClose();
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3>{pe?.id ? "Modifica ELTIF / Private Equity" : "Aggiungi ELTIF / Private Equity"}</h3>
+          <button className="icon-btn" onClick={onClose}><X size={18}/></button>
+        </div>
+        <div className="modal-body">
+          <label className="field-label">
+            Nome
+            <input type="text" value={form.name} onChange={(e) => set("name", e.target.value)} className="field-input"/>
+          </label>
+          <label className="field-label">
+            ISIN
+            <input type="text" value={form.identifier} onChange={(e) => set("identifier", e.target.value)} className="field-input"/>
+          </label>
+          <label className="field-label">
+            Prezzo acquisto (€)
+            <input type="number" step="any" value={form.costBasis} onChange={(e) => set("costBasis", e.target.value)} className="field-input"/>
+          </label>
+          <label className="field-label">
+            Prezzo attuale (€)
+            <input type="number" step="any" value={form.lastPrice} onChange={(e) => set("lastPrice", e.target.value)} className="field-input"
+              placeholder="Se vuoto, usa prezzo acquisto"/>
+          </label>
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-ghost" onClick={onClose}>Annulla</button>
+          <button className="btn btn-primary" onClick={handleSave} disabled={!form.name || !form.costBasis}>
+            <CheckCircle size={15}/> Salva
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ---- Custom Recharts tooltip ----
 const CustomTooltip = ({ active, payload, label, currency = true }) => {
   if (!active || !payload?.length) return null;
@@ -483,7 +571,6 @@ const CustomTooltip = ({ active, payload, label, currency = true }) => {
   );
 };
 
-// ---- Tooltip specifico per il grafico snapshot (mostra indice + valore reale) ----
 const SnapshotTooltip = ({ active, payload, label, snapshots }) => {
   if (!active || !payload?.length) return null;
   const snap = snapshots.find((s) => s.label === label);
@@ -540,15 +627,12 @@ const usePriceFetcher = () => {
     setError(null);
     try {
       if (a.manual) return { price: a.lastPrice, currency: "EUR", ts: Date.now() };
-
       const isin = (a.identifier || "").trim();
       if (!isISIN(isin)) throw new Error(`ISIN non valido: ${isin}`);
-
       const res  = await fetch(`/api/quote?isin=${encodeURIComponent(isin)}`);
       if (!res.ok) throw new Error(`Errore fetch: ${res.status}`);
       const data = await res.json();
       if (!data.latestQuote?.raw) throw new Error(`Nessun dato per ${isin}`);
-
       return { price: parseFloat(data.latestQuote.raw), currency: "EUR", ts: Date.now() };
     } catch (e) {
       setError(e.message);
@@ -577,23 +661,30 @@ export default function App() {
   const [assets,      setAssets] = useLS(STORAGE_KEYS.ASSETS,    getInitialAssets());
   const [pe,          setPE]     = useLS(STORAGE_KEYS.PRIVATE_EQUITY, getInitialPE());
   const [startups,    setSU]     = useLS(STORAGE_KEYS.STARTUP,   getInitialStartups());
+  const [totalCash,   setCash]   = useLS(STORAGE_KEYS.CASH,      9_500);
 
-  // Snapshots vengono caricati dal backend (non da localStorage)
-  const [snapshots,    setSnapshots]    = useState([]);
-  const [snapshotSaving, setSnapshotSaving] = useState(false);
-  const [snapshotMsg,    setSnapshotMsg]    = useState(null); // { type: ok|err, text }
+  const [snapshots,        setSnapshots]        = useState([]);
+  const [snapshotSaving,   setSnapshotSaving]   = useState(false);
+  const [snapshotMsg,      setSnapshotMsg]       = useState(null);
 
-  // Quali linee del grafico sono visibili (toggle dalla legend)
-  const [hiddenLines, setHiddenLines] = useState(new Set());
+  const [hiddenLines,  setHiddenLines]  = useState(new Set());
+  const [tab,          setTab]          = useState("overview");
+  const [search,       setSearch]       = useState("");
 
-  const [tab,          setTab]    = useState("overview");
-  const [search,       setSearch] = useState("");
-  const [modal,        setModal]  = useState(null);
+  // Modals: null = chiuso, {} = nuovo, { ...item } = modifica
+  const [assetModal,   setAssetModal]   = useState(null);
+  const [startupModal, setStartupModal] = useState(null);
+  const [peModal,      setPEModal]      = useState(null);
+  const [editCash,     setEditCash]     = useState(false);
+  const [cashInput,    setCashInput]    = useState("");
+
+  // Config import/export feedback
+  const [configMsg,    setConfigMsg]    = useState(null);
+
   const [projYears,    setProjY]  = useState(5);
   const [projReturn,   setProjR]  = useState(7);
   const [projMonthly,  setProjM]  = useState(1000);
   const [monthBudget,  setBudget] = useState(1500);
-  const [totalCash]               = useState(9_500);
 
   const { fetchOne, loading, error } = usePriceFetcher();
   const assetsRef = useRef(assets);
@@ -613,21 +704,21 @@ export default function App() {
   }, []);
 
   // ---- Derived ----
-  const totals   = useMemo(() => calcTotals(assets), [assets]);
-  const weights  = useMemo(() => calcWeights(assets, totals.val), [assets, totals.val]);
+  const totals    = useMemo(() => calcTotals(assets), [assets]);
+  const weights   = useMemo(() => calcWeights(assets, totals.val), [assets, totals.val]);
   const classDist = useMemo(() => calcClassDist(assets), [assets]);
-  const drift    = useMemo(() => calcDrift(assets, totals.val), [assets, totals.val]);
+  const drift     = useMemo(() => calcDrift(assets, totals.val), [assets, totals.val]);
 
-  const peTotal  = useMemo(() => pe.reduce((a, f) => a + (f.lastPrice || 0), 0), [pe]);
-  const suTotal  = useMemo(() => startups.reduce((a, s) => a + (s.invested || 0), 0), [startups]);
-  const suFees   = useMemo(() => startups.reduce((a, s) => a + (s.fee || 0), 0), [startups]);
+  const peTotal    = useMemo(() => pe.reduce((a, f) => a + (f.lastPrice || 0), 0), [pe]);
+  const suTotal    = useMemo(() => startups.reduce((a, s) => a + (s.invested || 0), 0), [startups]);
+  const suFees     = useMemo(() => startups.reduce((a, s) => a + (s.fee || 0), 0), [startups]);
   const grandTotal = totals.val + totalCash + peTotal + suTotal;
 
   const fullClassDist = useMemo(() => {
     const base = [...classDist];
-    if (suTotal > 0)    base.push({ name: "Startup",        value: r2(suTotal) });
-    if (peTotal > 0)    base.push({ name: "Private Equity", value: r2(peTotal) });
-    if (totalCash > 0)  base.push({ name: "Liquidità",      value: r2(totalCash) });
+    if (suTotal > 0)   base.push({ name: "Startup",        value: r2(suTotal) });
+    if (peTotal > 0)   base.push({ name: "Private Equity", value: r2(peTotal) });
+    if (totalCash > 0) base.push({ name: "Liquidità",      value: r2(totalCash) });
     return base;
   }, [classDist, suTotal, peTotal, totalCash]);
 
@@ -641,12 +732,11 @@ export default function App() {
     [grandTotal, projMonthly, projReturn, projYears]
   );
 
-  const finalVal       = projData.at(-1)?.base ?? 0;
-  const totalContrib   = grandTotal + projMonthly * 12 * projYears;
-  const projGain       = finalVal - totalContrib;
-  const projROI        = totalContrib > 0 ? (projGain / totalContrib) * 100 : 0;
+  const finalVal     = projData.at(-1)?.base ?? 0;
+  const totalContrib = grandTotal + projMonthly * 12 * projYears;
+  const projGain     = finalVal - totalContrib;
+  const projROI      = totalContrib > 0 ? (projGain / totalContrib) * 100 : 0;
 
-  // Metriche di rischio derivate dagli snapshot (usa totalValue)
   const histForRisk = useMemo(() =>
     snapshots.map((s) => ({ t: s.savedAt || `${s.year}-${String(s.month).padStart(2,"0")}-01`, v: s.totalValue })),
     [snapshots]
@@ -660,13 +750,11 @@ export default function App() {
     sortino: calcSortino(histForRisk),
   }), [histForRisk]);
 
-  // ---- Chart data per snapshot multi-linea ----
   const { data: snapshotChartData, assetIds } = useMemo(
     () => buildChartData(snapshots),
     [snapshots]
   );
 
-  // Mappa id → nome breve (per la legend)
   const assetNameMap = useMemo(() => {
     const m = {};
     assets.forEach((a) => { m[a.id] = a.name.split(" ").slice(0, 3).join(" "); });
@@ -723,40 +811,28 @@ export default function App() {
     return () => clearInterval(intervalRef.current);
   }, [fetchAllPrices]);
 
-  // ---- Salva snapshot mensile ----
+  // ---- Snapshot mensile ----
   const saveMonthlySnapshot = useCallback(async () => {
-    // Controlla che tutti i prezzi siano disponibili
     const missing = assets.filter((a) => !a.manual && !a.lastPrice).map((a) => a.name);
     if (missing.length > 0) {
-      setSnapshotMsg({ type: "err", text: `Prezzi mancanti: ${missing.join(", ")}. Aggiorna prima i prezzi.` });
+      setSnapshotMsg({ type: "err", text: `Prezzi mancanti: ${missing.join(", ")}` });
       setTimeout(() => setSnapshotMsg(null), 5000);
       return;
     }
-
     const now = new Date();
     const month = now.getMonth() + 1;
     const year  = now.getFullYear();
     const label = `${MONTH_LABELS_IT[month - 1]} ${year}`;
-
     const snapshotData = {
-      label,
-      month,
-      year,
+      label, month, year,
       totalValue: r2(totals.val),
-      assets: assets
-        .filter((a) => a.lastPrice)
-        .map((a) => ({
-          id:       a.id,
-          name:     a.name,
-          price:    a.lastPrice,
-          quantity: a.quantity,
-          value:    r2((a.lastPrice || 0) * (a.quantity || 0)),
-        })),
+      assets: assets.filter((a) => a.lastPrice).map((a) => ({
+        id: a.id, name: a.name, price: a.lastPrice,
+        quantity: a.quantity, value: r2((a.lastPrice || 0) * (a.quantity || 0)),
+      })),
     };
-
     setSnapshotSaving(true);
     setSnapshotMsg(null);
-
     try {
       const res = await fetch("/api/snapshot", {
         method: "POST",
@@ -765,11 +841,8 @@ export default function App() {
       });
       const json = await res.json();
       if (!json.ok) throw new Error("Risposta non valida dal server");
-
-      // Ricarica snapshot aggiornati
       const updated = await fetch("/api/snapshots").then((r) => r.json());
       if (Array.isArray(updated)) setSnapshots(updated);
-
       setSnapshotMsg({ type: "ok", text: `✓ Snapshot "${label}" salvato (${json.total} totali)` });
     } catch (e) {
       setSnapshotMsg({ type: "err", text: `Errore: ${e.message}` });
@@ -779,8 +852,7 @@ export default function App() {
     }
   }, [assets, totals.val]);
 
-  // ---- Esporta snapshot come file JSON locale ----
-  const exportSnapshots = useCallback(() => {
+  const exportSnapshotsFile = useCallback(() => {
     const blob = new Blob([JSON.stringify(snapshots, null, 2)], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
@@ -789,15 +861,13 @@ export default function App() {
     URL.revokeObjectURL(a.href);
   }, [snapshots]);
 
-  // ---- Importa snapshot da file JSON locale ----
+  const importSnapshotsRef = useRef(null);
   const importSnapshots = useCallback(async (file) => {
     if (!file) return;
     try {
       const text = await file.text();
       const parsed = JSON.parse(text);
       if (!Array.isArray(parsed)) throw new Error("Il file non contiene un array di snapshot.");
-
-      // Carica ogni snapshot sul backend (merge: sovrascrive stesso mese/anno)
       setSnapshotMsg({ type: "ok", text: "Importazione in corso…" });
       let count = 0;
       for (const snap of parsed) {
@@ -809,11 +879,8 @@ export default function App() {
         const json = await res.json();
         if (json.ok) count++;
       }
-
-      // Ricarica
       const updated = await fetch("/api/snapshots").then((r) => r.json());
       if (Array.isArray(updated)) setSnapshots(updated);
-
       setSnapshotMsg({ type: "ok", text: `✓ Importati ${count} snapshot` });
     } catch (e) {
       setSnapshotMsg({ type: "err", text: `Errore importazione: ${e.message}` });
@@ -822,19 +889,82 @@ export default function App() {
     }
   }, []);
 
-  const importInputRef = useRef(null);
+  // ====================== CONFIG EXPORT / IMPORT ======================
 
+  /**
+   * Esporta la configurazione completa del portafoglio:
+   * asset, startup, private equity, liquidità.
+   * I prezzi live (lastPrice, lastUpdated) vengono inclusi
+   * così all'import il portafoglio è già valorizzato.
+   */
+  const exportConfig = useCallback(() => {
+    const config = {
+      version:    CONFIG_VERSION,
+      exportedAt: new Date().toISOString(),
+      totalCash,
+      assets,
+      startups,
+      pe,
+    };
+    const blob = new Blob([JSON.stringify(config, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `portfolio_config_${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    showConfigMsg("ok", "✓ Configurazione esportata");
+  }, [assets, startups, pe, totalCash]);
+
+  const configImportRef = useRef(null);
+
+  const importConfig = useCallback(async (file) => {
+    if (!file) return;
+    try {
+      const text   = await file.text();
+      const config = JSON.parse(text);
+      if (!config.version || !Array.isArray(config.assets)) {
+        throw new Error("File non valido: manca 'version' o 'assets'.");
+      }
+      if (Array.isArray(config.assets))   setAssets(config.assets);
+      if (Array.isArray(config.startups)) setSU(config.startups);
+      if (Array.isArray(config.pe))       setPE(config.pe);
+      if (typeof config.totalCash === "number") setCash(config.totalCash);
+      showConfigMsg("ok", `✓ Configurazione importata (${config.exportedAt?.slice(0,10) ?? "?"})`);
+    } catch (e) {
+      showConfigMsg("err", `Errore: ${e.message}`);
+    }
+  }, []);
+
+  const showConfigMsg = (type, text) => {
+    setConfigMsg({ type, text });
+    setTimeout(() => setConfigMsg(null), 5000);
+  };
+
+  // ---- CRUD helpers ----
   const saveAsset = (a) => {
     setAssets((prev) => {
       const idx = prev.findIndex((x) => x.id === a.id);
-      return idx >= 0
-        ? prev.map((x) => x.id === a.id ? a : x)
-        : [...prev, a];
+      return idx >= 0 ? prev.map((x) => x.id === a.id ? a : x) : [...prev, a];
+    });
+  };
+
+  const saveSU = (s) => {
+    setSU((prev) => {
+      const idx = prev.findIndex((x) => x.id === s.id);
+      return idx >= 0 ? prev.map((x) => x.id === s.id ? s : x) : [...prev, s];
+    });
+  };
+
+  const savePE = (p) => {
+    setPE((prev) => {
+      const idx = prev.findIndex((x) => x.id === p.id);
+      return idx >= 0 ? prev.map((x) => x.id === p.id ? p : x) : [...prev, p];
     });
   };
 
   const deleteAsset = (id) => setAssets((prev) => prev.filter((a) => a.id !== id));
   const deleteSU    = (id) => setSU((prev) => prev.filter((s) => s.id !== id));
+  const deletePE    = (id) => setPE((prev) => prev.filter((p) => p.id !== id));
 
   const isLoading = Object.keys(loading).length > 0;
 
@@ -846,19 +976,15 @@ export default function App() {
     });
   };
 
-  // ---- Render helpers ----
   const tabLoading = isLoading && (
     <span className="loading-dot-row">
       <span className="loading-dot"/><span className="loading-dot"/><span className="loading-dot"/>
     </span>
   );
 
-  // ====================== TABS CONTENT ======================
-
-  // --- OVERVIEW ---
+  // ====================== TAB: OVERVIEW ======================
   const renderOverview = () => (
     <div className="tab-content">
-      {/* KPI row */}
       <div className="grid-4">
         <KpiCard label="Totale portafoglio" value={fmt(grandTotal, true)} icon={Wallet}
           sub={`Liquidità: ${fmt(totalCash)}`} color="blue" />
@@ -875,54 +1001,41 @@ export default function App() {
           icon={Target} />
       </div>
 
-      {/* Risk metrics */}
       {snapshots.length > 2 && (
         <div className="section-card">
           <h3 className="section-title"><Shield size={16}/> Metriche di rischio</h3>
           <div className="grid-5">
             <RiskCard label="CAGR"          value={riskMetrics.cagr}
-              fmtFn={(v) => fmtPct(v * 100)}
-              tooltip="Tasso di crescita annuo composto"
+              fmtFn={(v) => fmtPct(v * 100)} tooltip="Tasso di crescita annuo composto"
               quality={riskMetrics.cagr > 0.05 ? "good" : "bad"} />
             <RiskCard label="Volatilità"    value={riskMetrics.vol}
-              fmtFn={(v) => fmtPct(v * 100)}
-              tooltip="Volatilità annualizzata"
+              fmtFn={(v) => fmtPct(v * 100)} tooltip="Volatilità annualizzata"
               quality={riskMetrics.vol < 0.2 ? "good" : "bad"} />
             <RiskCard label="Max Drawdown"  value={riskMetrics.mdd}
-              fmtFn={(v) => fmtPct(v * 100)}
-              tooltip="Perdita massima dal picco"
+              fmtFn={(v) => fmtPct(v * 100)} tooltip="Perdita massima dal picco"
               quality={riskMetrics.mdd > -0.15 ? "good" : "bad"} />
             <RiskCard label="Sharpe Ratio"  value={riskMetrics.sharpe}
-              fmtFn={(v) => v.toFixed(2)}
-              tooltip="(Rendimento - Rf) / Volatilità. >1 ottimo"
+              fmtFn={(v) => v.toFixed(2)} tooltip="(Rendimento - Rf) / Volatilità. >1 ottimo"
               quality={riskMetrics.sharpe > 1 ? "good" : riskMetrics.sharpe > 0 ? "neutral" : "bad"} />
             <RiskCard label="Sortino Ratio" value={riskMetrics.sortino}
-              fmtFn={(v) => v.toFixed(2)}
-              tooltip="Come Sharpe ma penalizza solo la vol. negativa"
+              fmtFn={(v) => v.toFixed(2)} tooltip="Come Sharpe ma penalizza solo la vol. negativa"
               quality={riskMetrics.sortino > 1 ? "good" : riskMetrics.sortino > 0 ? "neutral" : "bad"} />
           </div>
-          <p className="hint-text">⚠ Metriche calcolate su {snapshots.length} snapshot mensili. Richiedono un lungo storico per essere significative.</p>
+          <p className="hint-text">⚠ Metriche calcolate su {snapshots.length} snapshot mensili.</p>
         </div>
       )}
 
-      {/* Best / Worst / Totale */}
       <div className="grid-3">
         <div className="section-card">
           <h3 className="section-title"><TrendingUp size={16}/> Miglior performer</h3>
           {totals.best ? (
-            <>
-              <div className="big-name">{totals.best.name}</div>
-              <Badge value={totals.best.perf * 100} />
-            </>
+            <><div className="big-name">{totals.best.name}</div><Badge value={totals.best.perf * 100} /></>
           ) : <p className="muted">Dati insufficienti</p>}
         </div>
         <div className="section-card">
           <h3 className="section-title"><TrendingDown size={16}/> Peggior performer</h3>
           {totals.worst ? (
-            <>
-              <div className="big-name">{totals.worst.name}</div>
-              <Badge value={totals.worst.perf * 100} />
-            </>
+            <><div className="big-name">{totals.worst.name}</div><Badge value={totals.worst.perf * 100} /></>
           ) : <p className="muted">Dati insufficienti</p>}
         </div>
         <div className="section-card">
@@ -934,9 +1047,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* Charts row */}
       <div className="grid-2">
-        {/* Pie chart */}
         <div className="section-card">
           <h3 className="section-title"><PieChartIcon size={16}/> Asset allocation (incl. Liquidità)</h3>
           <div style={{ height: 280 }}>
@@ -946,17 +1057,15 @@ export default function App() {
                   cx="50%" cy="50%" outerRadius={95} innerRadius={45}
                   label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
                   labelLine={false}>
-                  {fullClassDist.map((_, i) => (
-                    <Cell key={i} fill={PALETTE[i % PALETTE.length]} />
-                  ))}
+                  {fullClassDist.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]}/>)}
                 </Pie>
-                <ReTooltip formatter={(v, n) => [fmt(v), n]} />
+                <ReTooltip formatter={(v, n) => [fmt(v), n]}/>
               </PieChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* ── NUOVO GRAFICO SNAPSHOT ── */}
+        {/* Grafico snapshot */}
         <div className="section-card">
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
             <h3 className="section-title" style={{ margin: 0 }}>
@@ -964,50 +1073,24 @@ export default function App() {
             </h3>
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
               {snapshotMsg && (
-                <span style={{
-                  fontSize: 12,
-                  color: snapshotMsg.type === "ok" ? "var(--green)" : "var(--red)",
-                  maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                }}>
+                <span style={{ fontSize: 12, color: snapshotMsg.type === "ok" ? "var(--green)" : "var(--red)",
+                  maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {snapshotMsg.text}
                 </span>
               )}
-              {/* Input file nascosto per import */}
-              <input
-                ref={importInputRef}
-                type="file"
-                accept=".json"
-                style={{ display: "none" }}
-                onChange={(e) => { importSnapshots(e.target.files[0]); e.target.value = ""; }}
-              />
-              <button
-                className="btn btn-ghost"
-                onClick={() => importInputRef.current?.click()}
-                title="Carica un backup JSON degli snapshot"
-                style={{ fontSize: 12, padding: "6px 12px" }}
-              >
-                <Download size={13} style={{ transform: "rotate(180deg)" }}/>
-                Importa
+              <input ref={importSnapshotsRef} type="file" accept=".json" style={{ display: "none" }}
+                onChange={(e) => { importSnapshots(e.target.files[0]); e.target.value = ""; }}/>
+              <button className="btn btn-ghost" onClick={() => importSnapshotsRef.current?.click()}
+                style={{ fontSize: 12, padding: "6px 12px" }}>
+                <Download size={13} style={{ transform: "rotate(180deg)" }}/> Importa
               </button>
-              <button
-                className="btn btn-ghost"
-                onClick={exportSnapshots}
-                disabled={snapshots.length === 0}
-                title="Scarica tutti gli snapshot come file JSON"
-                style={{ fontSize: 12, padding: "6px 12px" }}
-              >
-                <Download size={13}/>
-                Esporta{snapshots.length > 0 ? ` (${snapshots.length})` : ""}
+              <button className="btn btn-ghost" onClick={exportSnapshotsFile} disabled={snapshots.length === 0}
+                style={{ fontSize: 12, padding: "6px 12px" }}>
+                <Download size={13}/> Esporta{snapshots.length > 0 ? ` (${snapshots.length})` : ""}
               </button>
-              <button
-                className="btn btn-primary"
-                onClick={saveMonthlySnapshot}
-                disabled={snapshotSaving || isLoading}
-                title="Registra i prezzi attuali come snapshot mensile"
-                style={{ fontSize: 12, padding: "6px 12px" }}
-              >
-                <Camera size={13}/>
-                {snapshotSaving ? "Salvataggio…" : "Snapshot mensile"}
+              <button className="btn btn-primary" onClick={saveMonthlySnapshot}
+                disabled={snapshotSaving || isLoading} style={{ fontSize: 12, padding: "6px 12px" }}>
+                <Camera size={13}/> {snapshotSaving ? "Salvataggio…" : "Snapshot mensile"}
               </button>
             </div>
           </div>
@@ -1015,12 +1098,9 @@ export default function App() {
           {snapshotChartData.length === 0 ? (
             <div className="chart-empty" style={{ height: 280 }}>
               <div style={{ textAlign: "center" }}>
-                <p className="muted" style={{ marginBottom: 8 }}>
-                  Nessuno snapshot registrato.
-                </p>
+                <p className="muted" style={{ marginBottom: 8 }}>Nessuno snapshot registrato.</p>
                 <p className="muted" style={{ fontSize: 12 }}>
-                  Premi <strong>Snapshot mensile</strong> una volta al mese per<br/>
-                  registrare i prezzi e popolare il grafico.
+                  Premi <strong>Snapshot mensile</strong> una volta al mese.
                 </p>
               </div>
             </div>
@@ -1028,77 +1108,44 @@ export default function App() {
             <>
               <div style={{ height: 280 }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={snapshotChartData}
-                    margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
+                  <LineChart data={snapshotChartData} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border)"/>
                     <XAxis dataKey="label" tick={{ fontSize: 10 }} stroke="var(--text-muted)"/>
-                    <YAxis
-                      tickFormatter={(v) => v + ""}
-                      tick={{ fontSize: 10 }}
-                      stroke="var(--text-muted)"
+                    <YAxis tickFormatter={(v) => v + ""} tick={{ fontSize: 10 }} stroke="var(--text-muted)"
                       domain={["auto","auto"]}
                       label={{ value: "Indice (base 100)", angle: -90, position: "insideLeft",
-                               style: { fontSize: 10, fill: "var(--text-muted)" }, offset: 10 }}
-                    />
-                    <ReTooltip
-                      content={<SnapshotTooltip snapshots={snapshots} />}
-                    />
-                    {/* Linea portafoglio totale — sempre visibile e più spessa */}
-                    <Line
-                      type="monotone"
-                      dataKey="__total__"
-                      name="Portafoglio"
-                      stroke={dark ? TOTAL_LINE_COLOR : TOTAL_LINE_COLOR_LIGHT}
-                      strokeWidth={2.5}
+                               style: { fontSize: 10, fill: "var(--text-muted)" }, offset: 10 }}/>
+                    <ReTooltip content={<SnapshotTooltip snapshots={snapshots}/>}/>
+                    <Line type="monotone" dataKey="__total__" name="Portafoglio"
+                      stroke={dark ? TOTAL_LINE_COLOR : TOTAL_LINE_COLOR_LIGHT} strokeWidth={2.5}
                       dot={{ r: 3, fill: dark ? TOTAL_LINE_COLOR : TOTAL_LINE_COLOR_LIGHT }}
-                      activeDot={{ r: 5 }}
-                      hide={hiddenLines.has("__total__")}
-                    />
-                    {/* Una linea per ogni asset */}
+                      activeDot={{ r: 5 }} hide={hiddenLines.has("__total__")}/>
                     {assetIds.map((id, i) => (
-                      <Line
-                        key={id}
-                        type="monotone"
-                        dataKey={id}
-                        name={assetNameMap[id] || id}
-                        stroke={PALETTE[i % PALETTE.length]}
-                        strokeWidth={1.5}
+                      <Line key={id} type="monotone" dataKey={id} name={assetNameMap[id] || id}
+                        stroke={PALETTE[i % PALETTE.length]} strokeWidth={1.5}
                         dot={snapshotChartData.length === 1 ? { r: 4 } : false}
-                        activeDot={{ r: 4 }}
-                        hide={hiddenLines.has(id)}
-                      />
+                        activeDot={{ r: 4 }} hide={hiddenLines.has(id)}/>
                     ))}
                   </LineChart>
                 </ResponsiveContainer>
               </div>
-
-              {/* Custom legend con toggle */}
               <div className="snapshot-legend">
-                <button
-                  className={`legend-item ${hiddenLines.has("__total__") ? "legend-item--hidden" : ""}`}
+                <button className={`legend-item ${hiddenLines.has("__total__") ? "legend-item--hidden" : ""}`}
                   onClick={() => toggleLine("__total__")}
-                  style={{ "--line-color": dark ? TOTAL_LINE_COLOR : TOTAL_LINE_COLOR_LIGHT }}
-                >
+                  style={{ "--line-color": dark ? TOTAL_LINE_COLOR : TOTAL_LINE_COLOR_LIGHT }}>
                   <span className="legend-dot" style={{ background: dark ? TOTAL_LINE_COLOR : TOTAL_LINE_COLOR_LIGHT }}/>
                   Portafoglio
                 </button>
                 {assetIds.map((id, i) => (
-                  <button
-                    key={id}
+                  <button key={id}
                     className={`legend-item ${hiddenLines.has(id) ? "legend-item--hidden" : ""}`}
                     onClick={() => toggleLine(id)}
-                    style={{ "--line-color": PALETTE[i % PALETTE.length] }}
-                  >
+                    style={{ "--line-color": PALETTE[i % PALETTE.length] }}>
                     <span className="legend-dot" style={{ background: PALETTE[i % PALETTE.length] }}/>
                     {assetNameMap[id] || id}
                   </button>
                 ))}
               </div>
-              {snapshotChartData.length === 1 && (
-                <p className="hint-text" style={{ marginTop: 8 }}>
-                  📌 Primo snapshot registrato — il grafico si anima dal secondo mese in poi.
-                </p>
-              )}
             </>
           )}
         </div>
@@ -1106,29 +1153,92 @@ export default function App() {
     </div>
   );
 
-  // --- PORTFOLIO ---
+  // ====================== TAB: PORTFOLIO ======================
   const renderPortfolio = () => (
     <div className="tab-content">
-      <div className="table-controls">
-        <div className="search-wrap">
-          <Search size={15} className="search-icon"/>
-          <input className="search-input" placeholder="Cerca per nome o ISIN…"
-            value={search} onChange={(e) => setSearch(e.target.value)}/>
-          {search && <button className="icon-btn" onClick={() => setSearch("")}><X size={14}/></button>}
-        </div>
-        <div className="btn-row">
-          <button className="btn btn-ghost" onClick={() => exportCSV(assets)}>
-            <Download size={15}/> Esporta CSV
-          </button>
-          <button className="btn btn-primary" onClick={() => setModal({})}>
-            <Plus size={15}/> Aggiungi asset
-          </button>
+
+      {/* ── CONFIG EXPORT / IMPORT ── */}
+      <div className="section-card" style={{ borderColor: "var(--blue)", borderWidth: 1 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+          <div>
+            <h3 className="section-title" style={{ margin: 0 }}>
+              <Settings size={16}/> Configurazione portafoglio
+            </h3>
+            <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+              Esporta tutto (asset, startup, PE, liquidità) in un file JSON locale.
+              Al prossimo accesso importalo per ripristinare la tua configurazione.
+            </p>
+          </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            {configMsg && (
+              <span style={{ fontSize: 12, color: configMsg.type === "ok" ? "var(--green)" : "var(--red)" }}>
+                {configMsg.text}
+              </span>
+            )}
+            <input ref={configImportRef} type="file" accept=".json" style={{ display: "none" }}
+              onChange={(e) => { importConfig(e.target.files[0]); e.target.value = ""; }}/>
+            <button className="btn btn-ghost" onClick={() => configImportRef.current?.click()}>
+              <Upload size={15}/> Importa configurazione
+            </button>
+            <button className="btn btn-primary" onClick={exportConfig}>
+              <Download size={15}/> Esporta configurazione
+            </button>
+          </div>
         </div>
       </div>
 
+      {/* ── LIQUIDITÀ ── */}
       <div className="section-card">
-        <h2 className="section-title"><Briefcase size={16}/> ETF & Asset quotati</h2>
-        <span className="muted" style={{ fontSize: 13 }}>Totale: <strong>{fmt(totals.val)}</strong></span>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <h2 className="section-title" style={{ margin: 0 }}><Wallet size={16}/> Liquidità</h2>
+          {!editCash ? (
+            <button className="icon-btn" onClick={() => { setCashInput(totalCash); setEditCash(true); }}>
+              <Edit2 size={14}/>
+            </button>
+          ) : (
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <input type="number" step="any" value={cashInput}
+                onChange={(e) => setCashInput(e.target.value)}
+                className="field-input" style={{ width: 140 }}/>
+              <button className="btn btn-primary" onClick={() => { setCash(parseFloat(cashInput) || 0); setEditCash(false); }}>
+                <CheckCircle size={14}/> OK
+              </button>
+              <button className="btn btn-ghost" onClick={() => setEditCash(false)}>
+                <X size={14}/>
+              </button>
+            </div>
+          )}
+        </div>
+        {!editCash && (
+          <div style={{ fontSize: "1.6rem", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", marginTop: 8 }}>
+            {fmt(totalCash)}
+          </div>
+        )}
+      </div>
+
+      {/* ── ETF & ASSET QUOTATI ── */}
+      <div className="section-card">
+        <div className="table-controls" style={{ marginBottom: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <h2 className="section-title" style={{ margin: 0 }}><Briefcase size={16}/> ETF & Asset quotati</h2>
+            <span className="muted" style={{ fontSize: 13 }}>Totale: <strong>{fmt(totals.val)}</strong></span>
+          </div>
+          <div className="btn-row">
+            <div className="search-wrap" style={{ maxWidth: 260 }}>
+              <Search size={15} className="search-icon"/>
+              <input className="search-input" placeholder="Cerca…"
+                value={search} onChange={(e) => setSearch(e.target.value)}/>
+              {search && <button className="icon-btn" onClick={() => setSearch("")}><X size={14}/></button>}
+            </div>
+            <button className="btn btn-ghost" onClick={() => exportCSV(assets)}>
+              <Download size={15}/> CSV
+            </button>
+            <button className="btn btn-primary" onClick={() => setAssetModal({})}>
+              <Plus size={15}/> Aggiungi
+            </button>
+          </div>
+        </div>
+
         <div className="table-wrap">
           <table className="data-table">
             <thead>
@@ -1161,7 +1271,7 @@ export default function App() {
                     <td className={`num mono ${perfE >= 0 ? "pos-text" : "neg-text"}`}>
                       {perfE >= 0 ? "+" : ""}{fmt(perfE)}
                     </td>
-                    <td className="num"><Badge value={perfP} /></td>
+                    <td className="num"><Badge value={perfP}/></td>
                     <td className="num mono">{weight.toFixed(1)}%</td>
                     <td className="num">
                       <span className={`target-badge ${Math.abs(diff) > 3 ? (diff > 0 ? "over" : "under") : "ok"}`}>
@@ -1171,7 +1281,7 @@ export default function App() {
                     <td><span className="class-tag">{a.assetClass}</span></td>
                     <td>
                       <div className="row-actions">
-                        <button className="icon-btn" onClick={() => setModal(a)}><Edit2 size={14}/></button>
+                        <button className="icon-btn" onClick={() => setAssetModal(a)}><Edit2 size={14}/></button>
                         <button className="icon-btn danger" onClick={() => {
                           if (window.confirm(`Rimuovere ${a.name}?`)) deleteAsset(a.id);
                         }}><Trash2 size={14}/></button>
@@ -1185,26 +1295,44 @@ export default function App() {
         </div>
       </div>
 
+      {/* ── STARTUP ── */}
       <div className="section-card">
-        <h2 className="section-title"><Activity size={16}/> Investimenti Startup</h2>
-        <div className="kpi-mini-row">
-          <span>Totale investito: <strong>{fmt(suTotal)}</strong></span>
-          <span>Commissioni totali: <strong>{fmt(suFees)}</strong></span>
-          <span>Numero startup: <strong>{startups.length}</strong></span>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <h2 className="section-title" style={{ margin: 0 }}><Activity size={16}/> Investimenti Startup</h2>
+            <div className="kpi-mini-row" style={{ marginBottom: 0 }}>
+              <span>Totale: <strong>{fmt(suTotal)}</strong></span>
+              <span>Commissioni: <strong>{fmt(suFees)}</strong></span>
+            </div>
+          </div>
+          <button className="btn btn-primary" onClick={() => setStartupModal({})}>
+            <Plus size={15}/> Aggiungi startup
+          </button>
         </div>
+
         <div className="table-wrap">
           <table className="data-table">
-            <thead><tr><th>Nome</th><th className="num">Commissioni</th><th className="num">Importo</th><th></th></tr></thead>
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th className="num">Importo investito</th>
+                <th className="num">Commissioni</th>
+                <th></th>
+              </tr>
+            </thead>
             <tbody>
               {startups.map((s) => (
                 <tr key={s.id}>
                   <td>{s.name}</td>
-                  <td className="num mono">{fmt(s.fee)}</td>
                   <td className="num mono"><strong>{fmt(s.invested)}</strong></td>
+                  <td className="num mono">{fmt(s.fee)}</td>
                   <td>
-                    <button className="icon-btn danger" onClick={() => {
-                      if (window.confirm(`Rimuovere ${s.name}?`)) deleteSU(s.id);
-                    }}><Trash2 size={14}/></button>
+                    <div className="row-actions">
+                      <button className="icon-btn" onClick={() => setStartupModal(s)}><Edit2 size={14}/></button>
+                      <button className="icon-btn danger" onClick={() => {
+                        if (window.confirm(`Rimuovere ${s.name}?`)) deleteSU(s.id);
+                      }}><Trash2 size={14}/></button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -1213,12 +1341,30 @@ export default function App() {
         </div>
       </div>
 
+      {/* ── PRIVATE EQUITY ── */}
       <div className="section-card">
-        <h2 className="section-title"><Shield size={16}/> Private Equity (ELTIF)</h2>
-        <span className="muted" style={{ fontSize: 13 }}>Totale: <strong>{fmt(peTotal)}</strong></span>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <h2 className="section-title" style={{ margin: 0 }}><Shield size={16}/> Private Equity (ELTIF)</h2>
+            <span className="muted" style={{ fontSize: 13 }}>Totale: <strong>{fmt(peTotal)}</strong></span>
+          </div>
+          <button className="btn btn-primary" onClick={() => setPEModal({})}>
+            <Plus size={15}/> Aggiungi ELTIF
+          </button>
+        </div>
+
         <div className="table-wrap">
           <table className="data-table">
-            <thead><tr><th>Nome</th><th>ISIN</th><th className="num">Prezzo acquisto</th><th className="num">Prezzo attuale</th><th className="num">Perf</th></tr></thead>
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>ISIN</th>
+                <th className="num">Prezzo acquisto</th>
+                <th className="num">Prezzo attuale</th>
+                <th className="num">Perf</th>
+                <th></th>
+              </tr>
+            </thead>
             <tbody>
               {pe.map((f) => {
                 const perf = f.costBasis ? r2(((f.lastPrice - f.costBasis) / f.costBasis) * 100) : 0;
@@ -1229,6 +1375,14 @@ export default function App() {
                     <td className="num mono">{fmt(f.costBasis)}</td>
                     <td className="num mono">{fmt(f.lastPrice)}</td>
                     <td className="num"><Badge value={perf}/></td>
+                    <td>
+                      <div className="row-actions">
+                        <button className="icon-btn" onClick={() => setPEModal(f)}><Edit2 size={14}/></button>
+                        <button className="icon-btn danger" onClick={() => {
+                          if (window.confirm(`Rimuovere ${f.name}?`)) deletePE(f.id);
+                        }}><Trash2 size={14}/></button>
+                      </div>
+                    </td>
                   </tr>
                 );
               })}
@@ -1239,7 +1393,7 @@ export default function App() {
     </div>
   );
 
-  // --- ANALYTICS ---
+  // ====================== TAB: ANALYTICS ======================
   const renderAnalytics = () => (
     <div className="tab-content">
       <div className="grid-2">
@@ -1254,9 +1408,7 @@ export default function App() {
                 <ReTooltip formatter={(v) => [v.toFixed(2) + "%", "Performance"]}/>
                 <ReferenceLine x={0} stroke="var(--text-muted)" strokeDasharray="4 2"/>
                 <Bar dataKey="value" name="Performance %">
-                  {perfBarData.map((e, i) => (
-                    <Cell key={i} fill={e.value >= 0 ? "#10b981" : "#ef4444"}/>
-                  ))}
+                  {perfBarData.map((e, i) => <Cell key={i} fill={e.value >= 0 ? "#10b981" : "#ef4444"}/>)}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -1272,7 +1424,7 @@ export default function App() {
                 <XAxis type="number" unit="%" tick={{ fontSize: 11 }} stroke="var(--text-muted)"/>
                 <YAxis type="category" dataKey="name" width={130} tick={{ fontSize: 11 }} stroke="var(--text-muted)"/>
                 <ReTooltip formatter={(v, n) => [v.toFixed(2) + "%", n]}/>
-                <Legend />
+                <Legend/>
                 <Bar dataKey="current" name="Peso attuale" fill="#3b82f6" radius={[0, 3, 3, 0]}/>
                 <Bar dataKey="target"  name="Peso target"  fill="#94a3b8" radius={[0, 3, 3, 0]}/>
               </BarChart>
@@ -1294,12 +1446,8 @@ export default function App() {
           </div>
         </div>
         <p className="hint-text">
-          {drift < 5
-            ? "✓ Il portafoglio è ben allineato con i target."
-            : drift < 15
-              ? "⚠ Leggero drift: considera un piccolo ribilanciamento."
-              : "🚨 Drift elevato: ribilanciamento consigliato."}
-          {" "}Drift totale = somma degli scostamenti assoluti tra peso attuale e target.
+          {drift < 5 ? "✓ Portafoglio allineato." : drift < 15 ? "⚠ Leggero drift." : "🚨 Drift elevato: ribilanciamento consigliato."}
+          {" "}Somma degli scostamenti assoluti tra peso attuale e target.
         </p>
       </div>
 
@@ -1321,12 +1469,11 @@ export default function App() {
     </div>
   );
 
-  // --- PROJECTION ---
+  // ====================== TAB: PROJECTION ======================
   const renderProjection = () => (
     <div className="tab-content">
       <div className="section-card">
         <h2 className="section-title"><LineChartIcon size={16}/> Proiezione crescita — scenari multipli</h2>
-
         <div className="grid-3" style={{ marginBottom: "1.5rem" }}>
           {[
             { label: "Rendimento annuo base (%)", val: projReturn, set: setProjR, step: 0.5, min: 0, max: 30 },
@@ -1342,37 +1489,34 @@ export default function App() {
         </div>
 
         <div className="grid-4" style={{ marginBottom: "1.5rem" }}>
-          <KpiCard label="Valore iniziale" value={fmt(grandTotal, true)} color="blue"/>
+          <KpiCard label="Valore iniziale"         value={fmt(grandTotal, true)} color="blue"/>
           <KpiCard label={`Proiettato (${projYears}a) — Base`}
             value={fmt(projData.at(-1)?.base ?? 0, true)} color="green"/>
           <KpiCard label={`Proiettato — Ottimistico (+3%)`}
             value={fmt(projData.at(-1)?.optimistic ?? 0, true)} color="green"/>
           <KpiCard label="Guadagno previsto (base)"
-            value={fmt(projGain, true)}
-            sub={`ROI: ${projROI.toFixed(1)}%`} color={projGain >= 0 ? "green" : "red"}/>
+            value={fmt(projGain, true)} sub={`ROI: ${projROI.toFixed(1)}%`}
+            color={projGain >= 0 ? "green" : "red"}/>
         </div>
 
         <div style={{ height: 380 }}>
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={projData}>
               <defs>
-                {[
-                  { id: "gOpt",  color: "#10b981" },
-                  { id: "gBase", color: "#3b82f6" },
-                  { id: "gPess", color: "#f59e0b" },
-                ].map(({ id, color }) => (
-                  <linearGradient key={id} id={id} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor={color} stopOpacity={0.2}/>
-                    <stop offset="95%" stopColor={color} stopOpacity={0}/>
-                  </linearGradient>
-                ))}
+                {[{ id: "gOpt", color: "#10b981" },{ id: "gBase", color: "#3b82f6" },{ id: "gPess", color: "#f59e0b" }]
+                  .map(({ id, color }) => (
+                    <linearGradient key={id} id={id} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%"  stopColor={color} stopOpacity={0.2}/>
+                      <stop offset="95%" stopColor={color} stopOpacity={0}/>
+                    </linearGradient>
+                  ))}
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border)"/>
               <XAxis dataKey="year" label={{ value: "Anni", position: "insideBottom", offset: -4 }}
                 tick={{ fontSize: 11 }} stroke="var(--text-muted)"/>
               <YAxis tickFormatter={(v) => `€${(v/1000).toFixed(0)}k`} tick={{ fontSize: 11 }} stroke="var(--text-muted)"/>
-              <ReTooltip content={<CustomTooltip />}/>
-              <Legend />
+              <ReTooltip content={<CustomTooltip/>}/>
+              <Legend/>
               <Area type="monotone" dataKey="optimistic" name={`Ottimistico (+${projReturn+3}%)`}
                 stroke="#10b981" fill="url(#gOpt)" strokeWidth={2} dot={false}/>
               <Area type="monotone" dataKey="base"       name={`Base (${projReturn}%)`}
@@ -1382,14 +1526,12 @@ export default function App() {
             </AreaChart>
           </ResponsiveContainer>
         </div>
-        <p className="hint-text">
-          Proiezione ipotetica con rendimento annuo costante. Non costituisce consulenza finanziaria.
-        </p>
+        <p className="hint-text">Proiezione ipotetica. Non costituisce consulenza finanziaria.</p>
       </div>
     </div>
   );
 
-  // --- REBALANCING ---
+  // ====================== TAB: REBALANCING ======================
   const renderRebalancing = () => (
     <div className="tab-content">
       <div className="section-card">
@@ -1436,6 +1578,7 @@ export default function App() {
                   <td className="num mono">{x.monthlyQty > 0 ? x.monthlyQty : "—"}</td>
                 </tr>
               ))}
+            </tbody>
             <tfoot>
               <tr className="total-row">
                 <td colSpan={5}><strong>Totale acquisto mensile</strong></td>
@@ -1454,7 +1597,6 @@ export default function App() {
                 <td/>
               </tr>
             </tfoot>
-            </tbody>
           </table>
         </div>
         <p className="hint-text">
@@ -1482,7 +1624,7 @@ export default function App() {
           <div className="grand-total">
             <span className="gt-label">Patrimonio totale</span>
             <span className="gt-value">{fmt(grandTotal)}</span>
-            <Badge value={totals.ret * 100} />
+            <Badge value={totals.ret * 100}/>
           </div>
           <button className="btn btn-primary" onClick={fetchAllPrices} disabled={isLoading}>
             <RefreshCw size={14} className={isLoading ? "spin" : ""}/>
@@ -1520,11 +1662,26 @@ export default function App() {
         {tab === "rebalancing" && renderRebalancing()}
       </main>
 
-      {modal !== null && (
+      {/* ── MODALI ── */}
+      {assetModal !== null && (
         <AssetModal
-          asset={modal?.id ? modal : null}
+          asset={assetModal?.id ? assetModal : null}
           onSave={saveAsset}
-          onClose={() => setModal(null)}
+          onClose={() => setAssetModal(null)}
+        />
+      )}
+      {startupModal !== null && (
+        <StartupModal
+          startup={startupModal?.id ? startupModal : null}
+          onSave={saveSU}
+          onClose={() => setStartupModal(null)}
+        />
+      )}
+      {peModal !== null && (
+        <PEModal
+          pe={peModal?.id ? peModal : null}
+          onSave={savePE}
+          onClose={() => setPEModal(null)}
         />
       )}
     </div>

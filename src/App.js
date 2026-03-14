@@ -779,6 +779,51 @@ export default function App() {
     }
   }, [assets, totals.val]);
 
+  // ---- Esporta snapshot come file JSON locale ----
+  const exportSnapshots = useCallback(() => {
+    const blob = new Blob([JSON.stringify(snapshots, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `snapshots_backup_${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }, [snapshots]);
+
+  // ---- Importa snapshot da file JSON locale ----
+  const importSnapshots = useCallback(async (file) => {
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      if (!Array.isArray(parsed)) throw new Error("Il file non contiene un array di snapshot.");
+
+      // Carica ogni snapshot sul backend (merge: sovrascrive stesso mese/anno)
+      setSnapshotMsg({ type: "ok", text: "Importazione in corso…" });
+      let count = 0;
+      for (const snap of parsed) {
+        const res = await fetch("/api/snapshot", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(snap),
+        });
+        const json = await res.json();
+        if (json.ok) count++;
+      }
+
+      // Ricarica
+      const updated = await fetch("/api/snapshots").then((r) => r.json());
+      if (Array.isArray(updated)) setSnapshots(updated);
+
+      setSnapshotMsg({ type: "ok", text: `✓ Importati ${count} snapshot` });
+    } catch (e) {
+      setSnapshotMsg({ type: "err", text: `Errore importazione: ${e.message}` });
+    } finally {
+      setTimeout(() => setSnapshotMsg(null), 5000);
+    }
+  }, []);
+
+  const importInputRef = useRef(null);
+
   const saveAsset = (a) => {
     setAssets((prev) => {
       const idx = prev.findIndex((x) => x.id === a.id);
@@ -917,7 +962,7 @@ export default function App() {
             <h3 className="section-title" style={{ margin: 0 }}>
               <LineChartIcon size={16}/> Storico prezzi mensile
             </h3>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
               {snapshotMsg && (
                 <span style={{
                   fontSize: 12,
@@ -927,6 +972,33 @@ export default function App() {
                   {snapshotMsg.text}
                 </span>
               )}
+              {/* Input file nascosto per import */}
+              <input
+                ref={importInputRef}
+                type="file"
+                accept=".json"
+                style={{ display: "none" }}
+                onChange={(e) => { importSnapshots(e.target.files[0]); e.target.value = ""; }}
+              />
+              <button
+                className="btn btn-ghost"
+                onClick={() => importInputRef.current?.click()}
+                title="Carica un backup JSON degli snapshot"
+                style={{ fontSize: 12, padding: "6px 12px" }}
+              >
+                <Download size={13} style={{ transform: "rotate(180deg)" }}/>
+                Importa
+              </button>
+              <button
+                className="btn btn-ghost"
+                onClick={exportSnapshots}
+                disabled={snapshots.length === 0}
+                title="Scarica tutti gli snapshot come file JSON"
+                style={{ fontSize: 12, padding: "6px 12px" }}
+              >
+                <Download size={13}/>
+                Esporta{snapshots.length > 0 ? ` (${snapshots.length})` : ""}
+              </button>
               <button
                 className="btn btn-primary"
                 onClick={saveMonthlySnapshot}
@@ -940,11 +1012,11 @@ export default function App() {
             </div>
           </div>
 
-          {snapshotChartData.length < 2 ? (
+          {snapshotChartData.length === 0 ? (
             <div className="chart-empty" style={{ height: 280 }}>
               <div style={{ textAlign: "center" }}>
                 <p className="muted" style={{ marginBottom: 8 }}>
-                  Nessun dato sufficiente.
+                  Nessuno snapshot registrato.
                 </p>
                 <p className="muted" style={{ fontSize: 12 }}>
                   Premi <strong>Snapshot mensile</strong> una volta al mese per<br/>
@@ -991,7 +1063,7 @@ export default function App() {
                         name={assetNameMap[id] || id}
                         stroke={PALETTE[i % PALETTE.length]}
                         strokeWidth={1.5}
-                        dot={false}
+                        dot={snapshotChartData.length === 1 ? { r: 4 } : false}
                         activeDot={{ r: 4 }}
                         hide={hiddenLines.has(id)}
                       />
@@ -1022,6 +1094,11 @@ export default function App() {
                   </button>
                 ))}
               </div>
+              {snapshotChartData.length === 1 && (
+                <p className="hint-text" style={{ marginTop: 8 }}>
+                  📌 Primo snapshot registrato — il grafico si anima dal secondo mese in poi.
+                </p>
+              )}
             </>
           )}
         </div>

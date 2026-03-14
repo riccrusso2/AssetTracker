@@ -1,4 +1,4 @@
-// App.js — Enhanced Portfolio Dashboard v2
+// App.js — Portfolio Dashboard — v3 (snapshot chart)
 import React, {
   useCallback, useEffect, useMemo, useRef, useState,
 } from "react";
@@ -12,21 +12,24 @@ import {
   BarChart2, LineChart as LineChartIcon, Target, Info, Trash2,
   Edit2, Moon, Sun, Download, Search, X, AlertTriangle,
   Activity, LayoutDashboard, Briefcase, Plus, CheckCircle,
-  Shield, ChevronUp, ChevronDown, Wallet,
+  Shield, ChevronUp, ChevronDown, Wallet, Camera,
 } from "lucide-react";
 import "./styles.css";
 
 // ====================== CONSTANTS ======================
 const STORAGE_KEYS = {
   ASSETS:         "pf.assets.v5",
-  HISTORY:        "pf.history.v5",
   STARTUP:        "pf.startup.v2",
   PRIVATE_EQUITY: "pf.pe.v2",
   DARK_MODE:      "pf.dark.v1",
-  SETTINGS:       "pf.settings.v1",
 };
 
 const AUTO_REFRESH_MS = 900_000; // 15 min
+
+const MONTH_LABELS_IT = [
+  "Gen","Feb","Mar","Apr","Mag","Giu",
+  "Lug","Ago","Set","Ott","Nov","Dic",
+];
 
 // ====================== UTILITIES ======================
 const r2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
@@ -110,6 +113,47 @@ const calcSortino = (history, rf = 0.03) => {
   return downDev === 0 ? null : (meanAnn - rf) / downDev;
 };
 
+// ====================== SNAPSHOT HELPERS ======================
+
+/**
+ * Trasforma un array di snapshot in dati per il LineChart.
+ * Tutte le serie vengono normalizzate a 100 al primo snapshot
+ * in modo da essere confrontabili su un'unica scala Y.
+ *
+ * Ogni punto ha la forma:
+ *   { label: "Mar 2025", total: 112.3, "ftseallworld": 108.7, ... }
+ */
+const buildChartData = (snapshots) => {
+  if (!snapshots.length) return { data: [], assetIds: [] };
+
+  const base = snapshots[0];
+  const baseTotal = base.totalValue || 1;
+  const baseByAssetId = {};
+  (base.assets || []).forEach((a) => { baseByAssetId[a.id] = a.price || 1; });
+
+  // Raccoglie tutti gli assetId presenti nei snapshot
+  const assetIdSet = new Set();
+  snapshots.forEach((s) => (s.assets || []).forEach((a) => assetIdSet.add(a.id)));
+  const assetIds = [...assetIdSet];
+
+  const data = snapshots.map((snap) => {
+    const point = { label: snap.label };
+
+    // Portfolio totale indicizzato
+    point["__total__"] = r2(((snap.totalValue || 0) / baseTotal) * 100);
+
+    // Ogni asset indicizzato
+    (snap.assets || []).forEach((a) => {
+      const b = baseByAssetId[a.id] || a.price || 1;
+      point[a.id] = r2(((a.price || 0) / b) * 100);
+    });
+
+    return point;
+  });
+
+  return { data, assetIds };
+};
+
 // ====================== CALCULATIONS ======================
 const calcTotals = (assets) => {
   let val = 0, cost = 0;
@@ -153,18 +197,6 @@ const calcDrift = (assets, totalVal) => {
   }, 0);
 };
 
-const calcProjection = (start, monthly, annualPct, years) => {
-  const monthlyRate = annualPct / 100 / 12;
-  const months = years * 12;
-  const data = [];
-  let v = start;
-  for (let m = 0; m <= months; m++) {
-    if (m % 12 === 0) data.push({ year: m / 12, base: r2(v) });
-    if (m < months) v = v * (1 + monthlyRate) + monthly;
-  }
-  return data;
-};
-
 const calcProjectionScenarios = (start, monthly, baseReturn, years) => {
   const pessimistic = Math.max(baseReturn - 3, 0);
   const optimistic  = baseReturn + 3;
@@ -193,14 +225,11 @@ const calcRebalancing = (assets, totalVal, budget) => {
     const cur   = (a.lastPrice || 0) * (a.quantity || 0);
     const curW  = (cur / totalVal) * 100;
     const tgtW  = (a.targetWeight || 0) * norm;
-    const delta = (tgtW / 100) * totalVal - cur;          // positive = underweight
+    const delta = (tgtW / 100) * totalVal - cur;
     const qty   = a.lastPrice ? delta / a.lastPrice : 0;
     return { ...a, curW, tgtW, delta, qty };
   });
 
-  // --- Iterative proportional allocation with capping ---
-  // Only buy underweight assets. Redistribute any leftover from capped assets.
-  // Invariant: sum(buy) === budget at the end.
   const buy = new Array(actions.length).fill(0);
   let eligible = actions.map((_, i) => i).filter((i) => actions[i].delta > 0);
   let remaining = budget;
@@ -214,13 +243,11 @@ const calcRebalancing = (assets, totalVal, budget) => {
 
     for (const i of eligible) {
       const proportional = (actions[i].tgtW / sumEligTgt) * remaining;
-      const room         = actions[i].delta - buy[i];       // how much more we can buy
+      const room         = actions[i].delta - buy[i];
 
       if (proportional >= room) {
-        // hit the cap — fill exactly to delta
         buy[i]    = actions[i].delta;
         allocated += room;
-        // do NOT add to nextEligible → this asset is done
       } else {
         buy[i]    += proportional;
         allocated += proportional;
@@ -232,19 +259,13 @@ const calcRebalancing = (assets, totalVal, budget) => {
     eligible   = nextEligible;
   }
 
-  // If budget > total underweight need, spread the leftover proportionally
-  // across ALL assets by target weight (buy more of anything, starting from most underweight)
   if (remaining > 0.005) {
     const sumAllTgt = actions.reduce((acc, a) => acc + a.tgtW, 0);
     if (sumAllTgt > 0) {
-      actions.forEach((a, i) => {
-        buy[i] += (a.tgtW / sumAllTgt) * remaining;
-      });
+      actions.forEach((a, i) => { buy[i] += (a.tgtW / sumAllTgt) * remaining; });
     }
   }
 
-  // Fix any floating-point drift so sum(r2 values) === budget
-  // Adjust the largest allocation by the rounding error.
   const rawBuys   = actions.map((_, i) => Math.max(0, buy[i] || 0));
   const rounded   = rawBuys.map(r2);
   const roundDiff = r2(budget - rounded.reduce((a, b) => a + b, 0));
@@ -314,15 +335,15 @@ const getInitialStartups = () => [
   { id: uid(), name: "Hymalaia",            invested: 300, fee: 24 },
   { id: uid(), name: "Favikon",             invested: 300, fee: 24 },
   { id: uid(), name: "Orbital Paradigm",    invested: 300, fee: 24 },
-  { id: uid(), name: "Yasu",               invested: 300, fee: 24 },
-  { id: uid(), name: "Reental",            invested: 300, fee: 24 },
-  { id: uid(), name: "Fintower",           invested: 300, fee: 24 },
-  { id: uid(), name: "Epic Games",         invested: 300, fee: 24 },
-  { id: uid(), name: "Mega",               invested: 300, fee: 24 },
-  { id: uid(), name: "Aalo Atomics",       invested: 300, fee: 24 },
-  { id: uid(), name: "Topo",               invested: 300, fee: 24 },
-  { id: uid(), name: "Perplexity",         invested: 300, fee: 24 },
-  { id: uid(), name: "Boardy",             invested: 300, fee: 24 },
+  { id: uid(), name: "Yasu",                invested: 300, fee: 24 },
+  { id: uid(), name: "Reental",             invested: 300, fee: 24 },
+  { id: uid(), name: "Fintower",            invested: 300, fee: 24 },
+  { id: uid(), name: "Epic Games",          invested: 300, fee: 24 },
+  { id: uid(), name: "Mega",                invested: 300, fee: 24 },
+  { id: uid(), name: "Aalo Atomics",        invested: 300, fee: 24 },
+  { id: uid(), name: "Topo",                invested: 300, fee: 24 },
+  { id: uid(), name: "Perplexity",          invested: 300, fee: 24 },
+  { id: uid(), name: "Boardy",              invested: 300, fee: 24 },
 ];
 
 const getInitialPE = () => [
@@ -335,6 +356,10 @@ const getInitialPE = () => [
 // ====================== COLORS ======================
 const PALETTE = ["#3b82f6","#10b981","#f59e0b","#ef4444","#8b5cf6",
                  "#14b8a6","#f97316","#22c55e","#e879f9","#60a5fa"];
+
+// Colore fisso per la linea "Portafoglio totale"
+const TOTAL_LINE_COLOR = "#ffffff";
+const TOTAL_LINE_COLOR_LIGHT = "#1e293b";
 
 // ====================== COMPONENTS ======================
 
@@ -458,6 +483,47 @@ const CustomTooltip = ({ active, payload, label, currency = true }) => {
   );
 };
 
+// ---- Tooltip specifico per il grafico snapshot (mostra indice + valore reale) ----
+const SnapshotTooltip = ({ active, payload, label, snapshots }) => {
+  if (!active || !payload?.length) return null;
+  const snap = snapshots.find((s) => s.label === label);
+  return (
+    <div className="chart-tooltip" style={{ minWidth: 200, maxHeight: 320, overflowY: "auto" }}>
+      <div className="tooltip-label">{label}</div>
+      {payload.map((p, i) => {
+        if (p.dataKey === "__total__") {
+          return (
+            <div key={i} className="tooltip-row">
+              <span style={{ color: p.color, fontWeight: 700 }}>Portafoglio</span>
+              <span style={{ fontWeight: 700 }}>
+                {p.value?.toFixed(1)} &nbsp;
+                <span style={{ color: "var(--text-muted)", fontSize: 11 }}>
+                  ({snap ? fmt(snap.totalValue) : ""})
+                </span>
+              </span>
+            </div>
+          );
+        }
+        const assetSnap = snap?.assets?.find((a) => a.id === p.dataKey);
+        return (
+          <div key={i} className="tooltip-row">
+            <span style={{ color: p.color }}>{p.name}</span>
+            <span>
+              {p.value?.toFixed(1)} &nbsp;
+              <span style={{ color: "var(--text-muted)", fontSize: 11 }}>
+                ({assetSnap ? fmt(assetSnap.price) : ""})
+              </span>
+            </span>
+          </div>
+        );
+      })}
+      <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 6 }}>
+        Indice 100 = primo snapshot
+      </div>
+    </div>
+  );
+};
+
 // ====================== HOOKS ======================
 const useLS = (key, init) => {
   const [v, setV] = useState(() => ls.get(key, init));
@@ -497,24 +563,32 @@ const usePriceFetcher = () => {
 
 // ====================== TABS ======================
 const TABS = [
-  { id: "overview",       label: "Overview",      icon: LayoutDashboard },
-  { id: "portfolio",      label: "Portafoglio",   icon: Briefcase },
-  { id: "analytics",      label: "Analisi",       icon: BarChart2 },
-  { id: "projection",     label: "Proiezione",    icon: LineChartIcon },
+  { id: "overview",       label: "Overview",        icon: LayoutDashboard },
+  { id: "portfolio",      label: "Portafoglio",     icon: Briefcase },
+  { id: "analytics",      label: "Analisi",         icon: BarChart2 },
+  { id: "projection",     label: "Proiezione",      icon: LineChartIcon },
   { id: "rebalancing",    label: "Ribilanciamento", icon: Target },
 ];
 
 // ====================== MAIN APP ======================
 export default function App() {
   // ---- State ----
-  const [dark,         setDark]   = useLS(STORAGE_KEYS.DARK_MODE, true);
-  const [assets,       setAssets] = useLS(STORAGE_KEYS.ASSETS,    getInitialAssets());
-  const [pe,           setPE]     = useLS(STORAGE_KEYS.PRIVATE_EQUITY, getInitialPE());
-  const [startups,     setSU]     = useLS(STORAGE_KEYS.STARTUP,   getInitialStartups());
-  const [history,      setHist]   = useLS(STORAGE_KEYS.HISTORY,   []);
+  const [dark,        setDark]   = useLS(STORAGE_KEYS.DARK_MODE, true);
+  const [assets,      setAssets] = useLS(STORAGE_KEYS.ASSETS,    getInitialAssets());
+  const [pe,          setPE]     = useLS(STORAGE_KEYS.PRIVATE_EQUITY, getInitialPE());
+  const [startups,    setSU]     = useLS(STORAGE_KEYS.STARTUP,   getInitialStartups());
+
+  // Snapshots vengono caricati dal backend (non da localStorage)
+  const [snapshots,    setSnapshots]    = useState([]);
+  const [snapshotSaving, setSnapshotSaving] = useState(false);
+  const [snapshotMsg,    setSnapshotMsg]    = useState(null); // { type: ok|err, text }
+
+  // Quali linee del grafico sono visibili (toggle dalla legend)
+  const [hiddenLines, setHiddenLines] = useState(new Set());
+
   const [tab,          setTab]    = useState("overview");
   const [search,       setSearch] = useState("");
-  const [modal,        setModal]  = useState(null); // null | {asset} | {}
+  const [modal,        setModal]  = useState(null);
   const [projYears,    setProjY]  = useState(5);
   const [projReturn,   setProjR]  = useState(7);
   const [projMonthly,  setProjM]  = useState(1000);
@@ -530,6 +604,14 @@ export default function App() {
     document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
   }, [dark]);
 
+  // ---- Carica snapshot dal backend ----
+  useEffect(() => {
+    fetch("/api/snapshots")
+      .then((r) => r.json())
+      .then((data) => { if (Array.isArray(data)) setSnapshots(data); })
+      .catch(() => {});
+  }, []);
+
   // ---- Derived ----
   const totals   = useMemo(() => calcTotals(assets), [assets]);
   const weights  = useMemo(() => calcWeights(assets, totals.val), [assets, totals.val]);
@@ -543,9 +625,9 @@ export default function App() {
 
   const fullClassDist = useMemo(() => {
     const base = [...classDist];
-    if (suTotal > 0) base.push({ name: "Startup",       value: r2(suTotal) });
-    if (peTotal > 0) base.push({ name: "Private Equity", value: r2(peTotal) });
-    if (totalCash > 0) base.push({ name: "Liquidità",   value: r2(totalCash) });
+    if (suTotal > 0)    base.push({ name: "Startup",        value: r2(suTotal) });
+    if (peTotal > 0)    base.push({ name: "Private Equity", value: r2(peTotal) });
+    if (totalCash > 0)  base.push({ name: "Liquidità",      value: r2(totalCash) });
     return base;
   }, [classDist, suTotal, peTotal, totalCash]);
 
@@ -564,19 +646,32 @@ export default function App() {
   const projGain       = finalVal - totalContrib;
   const projROI        = totalContrib > 0 ? (projGain / totalContrib) * 100 : 0;
 
-  const histLineData   = useMemo(() =>
-    history.map((h) => ({
-      date:  new Date(h.t).toLocaleDateString("it-IT", { month: "short", day: "numeric" }),
-      value: h.v,
-    })), [history]);
+  // Metriche di rischio derivate dagli snapshot (usa totalValue)
+  const histForRisk = useMemo(() =>
+    snapshots.map((s) => ({ t: s.savedAt || `${s.year}-${String(s.month).padStart(2,"0")}-01`, v: s.totalValue })),
+    [snapshots]
+  );
 
   const riskMetrics = useMemo(() => ({
-    cagr:   calcCAGR(history),
-    vol:    calcVolatility(history),
-    mdd:    calcMaxDrawdown(history),
-    sharpe: calcSharpe(history),
-    sortino: calcSortino(history),
-  }), [history]);
+    cagr:    calcCAGR(histForRisk),
+    vol:     calcVolatility(histForRisk),
+    mdd:     calcMaxDrawdown(histForRisk),
+    sharpe:  calcSharpe(histForRisk),
+    sortino: calcSortino(histForRisk),
+  }), [histForRisk]);
+
+  // ---- Chart data per snapshot multi-linea ----
+  const { data: snapshotChartData, assetIds } = useMemo(
+    () => buildChartData(snapshots),
+    [snapshots]
+  );
+
+  // Mappa id → nome breve (per la legend)
+  const assetNameMap = useMemo(() => {
+    const m = {};
+    assets.forEach((a) => { m[a.id] = a.name.split(" ").slice(0, 3).join(" "); });
+    return m;
+  }, [assets]);
 
   const perfBarData = useMemo(() =>
     assets
@@ -619,9 +714,7 @@ export default function App() {
       })
     );
     setAssets(updated);
-    const now = updated.reduce((acc, a) => acc + (a.lastPrice ? a.lastPrice * (a.quantity || 0) : 0), 0);
-    setHist((h) => [...h, { t: new Date().toISOString(), v: r2(now) }].slice(-1000));
-  }, [fetchOne, setAssets, setHist]);
+  }, [fetchOne, setAssets]);
 
   const intervalRef = useRef(null);
   useEffect(() => {
@@ -629,6 +722,62 @@ export default function App() {
     intervalRef.current = setInterval(fetchAllPrices, AUTO_REFRESH_MS);
     return () => clearInterval(intervalRef.current);
   }, [fetchAllPrices]);
+
+  // ---- Salva snapshot mensile ----
+  const saveMonthlySnapshot = useCallback(async () => {
+    // Controlla che tutti i prezzi siano disponibili
+    const missing = assets.filter((a) => !a.manual && !a.lastPrice).map((a) => a.name);
+    if (missing.length > 0) {
+      setSnapshotMsg({ type: "err", text: `Prezzi mancanti: ${missing.join(", ")}. Aggiorna prima i prezzi.` });
+      setTimeout(() => setSnapshotMsg(null), 5000);
+      return;
+    }
+
+    const now = new Date();
+    const month = now.getMonth() + 1;
+    const year  = now.getFullYear();
+    const label = `${MONTH_LABELS_IT[month - 1]} ${year}`;
+
+    const snapshotData = {
+      label,
+      month,
+      year,
+      totalValue: r2(totals.val),
+      assets: assets
+        .filter((a) => a.lastPrice)
+        .map((a) => ({
+          id:       a.id,
+          name:     a.name,
+          price:    a.lastPrice,
+          quantity: a.quantity,
+          value:    r2((a.lastPrice || 0) * (a.quantity || 0)),
+        })),
+    };
+
+    setSnapshotSaving(true);
+    setSnapshotMsg(null);
+
+    try {
+      const res = await fetch("/api/snapshot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(snapshotData),
+      });
+      const json = await res.json();
+      if (!json.ok) throw new Error("Risposta non valida dal server");
+
+      // Ricarica snapshot aggiornati
+      const updated = await fetch("/api/snapshots").then((r) => r.json());
+      if (Array.isArray(updated)) setSnapshots(updated);
+
+      setSnapshotMsg({ type: "ok", text: `✓ Snapshot "${label}" salvato (${json.total} totali)` });
+    } catch (e) {
+      setSnapshotMsg({ type: "err", text: `Errore: ${e.message}` });
+    } finally {
+      setSnapshotSaving(false);
+      setTimeout(() => setSnapshotMsg(null), 5000);
+    }
+  }, [assets, totals.val]);
 
   const saveAsset = (a) => {
     setAssets((prev) => {
@@ -643,6 +792,14 @@ export default function App() {
   const deleteSU    = (id) => setSU((prev) => prev.filter((s) => s.id !== id));
 
   const isLoading = Object.keys(loading).length > 0;
+
+  const toggleLine = (dataKey) => {
+    setHiddenLines((prev) => {
+      const next = new Set(prev);
+      next.has(dataKey) ? next.delete(dataKey) : next.add(dataKey);
+      return next;
+    });
+  };
 
   // ---- Render helpers ----
   const tabLoading = isLoading && (
@@ -674,32 +831,32 @@ export default function App() {
       </div>
 
       {/* Risk metrics */}
-      {history.length > 2 && (
+      {snapshots.length > 2 && (
         <div className="section-card">
           <h3 className="section-title"><Shield size={16}/> Metriche di rischio</h3>
           <div className="grid-5">
-            <RiskCard label="CAGR"         value={riskMetrics.cagr}
+            <RiskCard label="CAGR"          value={riskMetrics.cagr}
               fmtFn={(v) => fmtPct(v * 100)}
               tooltip="Tasso di crescita annuo composto"
               quality={riskMetrics.cagr > 0.05 ? "good" : "bad"} />
-            <RiskCard label="Volatilità"   value={riskMetrics.vol}
+            <RiskCard label="Volatilità"    value={riskMetrics.vol}
               fmtFn={(v) => fmtPct(v * 100)}
-              tooltip="Volatilità annualizzata (deviazione std)"
+              tooltip="Volatilità annualizzata"
               quality={riskMetrics.vol < 0.2 ? "good" : "bad"} />
-            <RiskCard label="Max Drawdown" value={riskMetrics.mdd}
+            <RiskCard label="Max Drawdown"  value={riskMetrics.mdd}
               fmtFn={(v) => fmtPct(v * 100)}
               tooltip="Perdita massima dal picco"
               quality={riskMetrics.mdd > -0.15 ? "good" : "bad"} />
-            <RiskCard label="Sharpe Ratio" value={riskMetrics.sharpe}
+            <RiskCard label="Sharpe Ratio"  value={riskMetrics.sharpe}
               fmtFn={(v) => v.toFixed(2)}
               tooltip="(Rendimento - Rf) / Volatilità. >1 ottimo"
               quality={riskMetrics.sharpe > 1 ? "good" : riskMetrics.sharpe > 0 ? "neutral" : "bad"} />
             <RiskCard label="Sortino Ratio" value={riskMetrics.sortino}
               fmtFn={(v) => v.toFixed(2)}
-              tooltip="Come Sharpe ma penalizza solo la volatilità negativa"
+              tooltip="Come Sharpe ma penalizza solo la vol. negativa"
               quality={riskMetrics.sortino > 1 ? "good" : riskMetrics.sortino > 0 ? "neutral" : "bad"} />
           </div>
-          <p className="hint-text">⚠ Metriche calcolate sulle {history.length} registrazioni storiche. Richiedono un lungo storico per essere significative.</p>
+          <p className="hint-text">⚠ Metriche calcolate su {snapshots.length} snapshot mensili. Richiedono un lungo storico per essere significative.</p>
         </div>
       )}
 
@@ -734,6 +891,7 @@ export default function App() {
 
       {/* Charts row */}
       <div className="grid-2">
+        {/* Pie chart */}
         <div className="section-card">
           <h3 className="section-title"><PieChartIcon size={16}/> Asset allocation (incl. Liquidità)</h3>
           <div style={{ height: 280 }}>
@@ -753,29 +911,118 @@ export default function App() {
           </div>
         </div>
 
+        {/* ── NUOVO GRAFICO SNAPSHOT ── */}
         <div className="section-card">
-          <h3 className="section-title"><LineChartIcon size={16}/> Storico valore portafoglio</h3>
-          {histLineData.length > 1 ? (
-            <div style={{ height: 280 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={histLineData}>
-                  <defs>
-                    <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%"  stopColor="#3b82f6" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)"/>
-                  <XAxis dataKey="date" tick={{ fontSize: 11 }} stroke="var(--text-muted)"/>
-                  <YAxis tickFormatter={(v) => `€${(v/1000).toFixed(0)}k`} tick={{ fontSize: 11 }} stroke="var(--text-muted)"/>
-                  <ReTooltip content={<CustomTooltip />} />
-                  <Area type="monotone" dataKey="value" name="Valore ETF"
-                    stroke="#3b82f6" fill="url(#areaGrad)" strokeWidth={2} dot={false}/>
-                </AreaChart>
-              </ResponsiveContainer>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+            <h3 className="section-title" style={{ margin: 0 }}>
+              <LineChartIcon size={16}/> Storico prezzi mensile
+            </h3>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              {snapshotMsg && (
+                <span style={{
+                  fontSize: 12,
+                  color: snapshotMsg.type === "ok" ? "var(--green)" : "var(--red)",
+                  maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                }}>
+                  {snapshotMsg.text}
+                </span>
+              )}
+              <button
+                className="btn btn-primary"
+                onClick={saveMonthlySnapshot}
+                disabled={snapshotSaving || isLoading}
+                title="Registra i prezzi attuali come snapshot mensile"
+                style={{ fontSize: 12, padding: "6px 12px" }}
+              >
+                <Camera size={13}/>
+                {snapshotSaving ? "Salvataggio…" : "Snapshot mensile"}
+              </button>
+            </div>
+          </div>
+
+          {snapshotChartData.length < 2 ? (
+            <div className="chart-empty" style={{ height: 280 }}>
+              <div style={{ textAlign: "center" }}>
+                <p className="muted" style={{ marginBottom: 8 }}>
+                  Nessun dato sufficiente.
+                </p>
+                <p className="muted" style={{ fontSize: 12 }}>
+                  Premi <strong>Snapshot mensile</strong> una volta al mese per<br/>
+                  registrare i prezzi e popolare il grafico.
+                </p>
+              </div>
             </div>
           ) : (
-            <p className="muted chart-empty">Lo storico si popolerà automaticamente ad ogni aggiornamento prezzi.</p>
+            <>
+              <div style={{ height: 280 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={snapshotChartData}
+                    margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)"/>
+                    <XAxis dataKey="label" tick={{ fontSize: 10 }} stroke="var(--text-muted)"/>
+                    <YAxis
+                      tickFormatter={(v) => v + ""}
+                      tick={{ fontSize: 10 }}
+                      stroke="var(--text-muted)"
+                      domain={["auto","auto"]}
+                      label={{ value: "Indice (base 100)", angle: -90, position: "insideLeft",
+                               style: { fontSize: 10, fill: "var(--text-muted)" }, offset: 10 }}
+                    />
+                    <ReTooltip
+                      content={<SnapshotTooltip snapshots={snapshots} />}
+                    />
+                    {/* Linea portafoglio totale — sempre visibile e più spessa */}
+                    <Line
+                      type="monotone"
+                      dataKey="__total__"
+                      name="Portafoglio"
+                      stroke={dark ? TOTAL_LINE_COLOR : TOTAL_LINE_COLOR_LIGHT}
+                      strokeWidth={2.5}
+                      dot={{ r: 3, fill: dark ? TOTAL_LINE_COLOR : TOTAL_LINE_COLOR_LIGHT }}
+                      activeDot={{ r: 5 }}
+                      hide={hiddenLines.has("__total__")}
+                    />
+                    {/* Una linea per ogni asset */}
+                    {assetIds.map((id, i) => (
+                      <Line
+                        key={id}
+                        type="monotone"
+                        dataKey={id}
+                        name={assetNameMap[id] || id}
+                        stroke={PALETTE[i % PALETTE.length]}
+                        strokeWidth={1.5}
+                        dot={false}
+                        activeDot={{ r: 4 }}
+                        hide={hiddenLines.has(id)}
+                      />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Custom legend con toggle */}
+              <div className="snapshot-legend">
+                <button
+                  className={`legend-item ${hiddenLines.has("__total__") ? "legend-item--hidden" : ""}`}
+                  onClick={() => toggleLine("__total__")}
+                  style={{ "--line-color": dark ? TOTAL_LINE_COLOR : TOTAL_LINE_COLOR_LIGHT }}
+                >
+                  <span className="legend-dot" style={{ background: dark ? TOTAL_LINE_COLOR : TOTAL_LINE_COLOR_LIGHT }}/>
+                  Portafoglio
+                </button>
+                {assetIds.map((id, i) => (
+                  <button
+                    key={id}
+                    className={`legend-item ${hiddenLines.has(id) ? "legend-item--hidden" : ""}`}
+                    onClick={() => toggleLine(id)}
+                    style={{ "--line-color": PALETTE[i % PALETTE.length] }}
+                  >
+                    <span className="legend-dot" style={{ background: PALETTE[i % PALETTE.length] }}/>
+                    {assetNameMap[id] || id}
+                  </button>
+                ))}
+              </div>
+            </>
           )}
         </div>
       </div>
@@ -785,7 +1032,6 @@ export default function App() {
   // --- PORTFOLIO ---
   const renderPortfolio = () => (
     <div className="tab-content">
-      {/* Controls */}
       <div className="table-controls">
         <div className="search-wrap">
           <Search size={15} className="search-icon"/>
@@ -803,7 +1049,6 @@ export default function App() {
         </div>
       </div>
 
-      {/* Assets table */}
       <div className="section-card">
         <h2 className="section-title"><Briefcase size={16}/> ETF & Asset quotati</h2>
         <span className="muted" style={{ fontSize: 13 }}>Totale: <strong>{fmt(totals.val)}</strong></span>
@@ -811,18 +1056,11 @@ export default function App() {
           <table className="data-table">
             <thead>
               <tr>
-                <th>Nome</th>
-                <th>ISIN</th>
-                <th className="num">Quantità</th>
-                <th className="num">P. Acquisto</th>
-                <th className="num">P. Attuale</th>
-                <th className="num">Valore</th>
-                <th className="num">Perf €</th>
-                <th className="num">Perf %</th>
-                <th className="num">Peso</th>
-                <th className="num">Target</th>
-                <th>Classe</th>
-                <th></th>
+                <th>Nome</th><th>ISIN</th><th className="num">Quantità</th>
+                <th className="num">P. Acquisto</th><th className="num">P. Attuale</th>
+                <th className="num">Valore</th><th className="num">Perf €</th>
+                <th className="num">Perf %</th><th className="num">Peso</th>
+                <th className="num">Target</th><th>Classe</th><th></th>
               </tr>
             </thead>
             <tbody>
@@ -856,8 +1094,10 @@ export default function App() {
                     <td><span className="class-tag">{a.assetClass}</span></td>
                     <td>
                       <div className="row-actions">
-                        <button className="icon-btn" onClick={() => setModal(a)} title="Modifica"><Edit2 size={14}/></button>
-                        <button className="icon-btn danger" onClick={() => { if (window.confirm(`Rimuovere ${a.name}?`)) deleteAsset(a.id); }} title="Elimina"><Trash2 size={14}/></button>
+                        <button className="icon-btn" onClick={() => setModal(a)}><Edit2 size={14}/></button>
+                        <button className="icon-btn danger" onClick={() => {
+                          if (window.confirm(`Rimuovere ${a.name}?`)) deleteAsset(a.id);
+                        }}><Trash2 size={14}/></button>
                       </div>
                     </td>
                   </tr>
@@ -868,7 +1108,6 @@ export default function App() {
         </div>
       </div>
 
-      {/* Startup table */}
       <div className="section-card">
         <h2 className="section-title"><Activity size={16}/> Investimenti Startup</h2>
         <div className="kpi-mini-row">
@@ -886,7 +1125,9 @@ export default function App() {
                   <td className="num mono">{fmt(s.fee)}</td>
                   <td className="num mono"><strong>{fmt(s.invested)}</strong></td>
                   <td>
-                    <button className="icon-btn danger" onClick={() => { if (window.confirm(`Rimuovere ${s.name}?`)) deleteSU(s.id); }}><Trash2 size={14}/></button>
+                    <button className="icon-btn danger" onClick={() => {
+                      if (window.confirm(`Rimuovere ${s.name}?`)) deleteSU(s.id);
+                    }}><Trash2 size={14}/></button>
                   </td>
                 </tr>
               ))}
@@ -895,7 +1136,6 @@ export default function App() {
         </div>
       </div>
 
-      {/* PE table */}
       <div className="section-card">
         <h2 className="section-title"><Shield size={16}/> Private Equity (ELTIF)</h2>
         <span className="muted" style={{ fontSize: 13 }}>Totale: <strong>{fmt(peTotal)}</strong></span>
@@ -964,7 +1204,6 @@ export default function App() {
         </div>
       </div>
 
-      {/* Drift meter */}
       <div className="section-card">
         <h3 className="section-title"><Activity size={16}/> Indice di drift portafoglio</h3>
         <div className="drift-meter">
@@ -987,7 +1226,6 @@ export default function App() {
         </p>
       </div>
 
-      {/* Asset class donut */}
       <div className="section-card">
         <h3 className="section-title"><PieChartIcon size={16}/> Distribuzione per asset class (solo ETF & Asset quotati)</h3>
         <div style={{ height: 260 }}>
@@ -1068,8 +1306,7 @@ export default function App() {
           </ResponsiveContainer>
         </div>
         <p className="hint-text">
-          Proiezione ipotetica con rendimento annuo costante. I rendimenti reali variano in base alle condizioni di mercato.
-          Non costituisce consulenza finanziaria.
+          Proiezione ipotetica con rendimento annuo costante. Non costituisce consulenza finanziaria.
         </p>
       </div>
     </div>
@@ -1132,9 +1369,7 @@ export default function App() {
                     return (
                       <span className={diff > 0.02 ? "neg-text" : "pos-text"}>
                         <strong>{fmt(total)}</strong>
-                        {diff > 0.02
-                          ? ` ⚠ (diff: ${fmt(diff)})`
-                          : " ✓"}
+                        {diff > 0.02 ? ` ⚠ (diff: ${fmt(diff)})` : " ✓"}
                       </span>
                     );
                   })()}
@@ -1147,7 +1382,6 @@ export default function App() {
         </div>
         <p className="hint-text">
           I pesi target vengono normalizzati a 100%. Il budget mensile viene allocato prioritariamente agli asset sottopesati.
-          Le quantità sono stime basate sull'ultimo prezzo, al lordo di commissioni e slippage.
         </p>
       </div>
     </div>
@@ -1156,7 +1390,6 @@ export default function App() {
   // ====================== RENDER ======================
   return (
     <div className={`app ${dark ? "dark" : "light"}`}>
-      {/* HEADER */}
       <header className="app-header">
         <div className="header-left">
           <div className="logo-mark">PF</div>
@@ -1184,14 +1417,12 @@ export default function App() {
         </div>
       </header>
 
-      {/* ERROR BANNER */}
       {error && (
         <div className="alert alert-red mx-4">
           <AlertTriangle size={14}/> {error}
         </div>
       )}
 
-      {/* TABS */}
       <nav className="tab-bar">
         {TABS.map((t) => {
           const Icon = t.icon;
@@ -1204,7 +1435,6 @@ export default function App() {
         })}
       </nav>
 
-      {/* CONTENT */}
       <main className="app-main">
         {tab === "overview"    && renderOverview()}
         {tab === "portfolio"   && renderPortfolio()}
@@ -1213,7 +1443,6 @@ export default function App() {
         {tab === "rebalancing" && renderRebalancing()}
       </main>
 
-      {/* MODAL */}
       {modal !== null && (
         <AssetModal
           asset={modal?.id ? modal : null}

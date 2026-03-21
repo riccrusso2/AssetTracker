@@ -328,6 +328,8 @@ const getInitialStartups = () => [
   { id: uid(), name: "Topo",                invested: 300, fee: 24 },
   { id: uid(), name: "Perplexity",          invested: 300, fee: 24 },
   { id: uid(), name: "Boardy",              invested: 300, fee: 24 },
+  { id: uid(), name: "Crusoe",              invested: 300, fee: 24 },
+
 ];
 
 const getInitialPE = () => [

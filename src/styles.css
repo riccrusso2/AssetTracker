@@ -262,6 +262,45 @@ html, body {
 .risk-label { font-size: 11px; font-weight: 500; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
 .risk-value { font-size: 1.2rem; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
 
+/* =================== EMPTY STATE =================== */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 64px 24px;
+  text-align: center;
+  background: var(--bg-card);
+  border: 1px dashed var(--border2);
+  border-radius: var(--radius);
+  gap: 12px;
+}
+
+.empty-icon {
+  width: 64px; height: 64px;
+  border-radius: 16px;
+  background: var(--bg-card2);
+  border: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.empty-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.empty-desc {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-muted);
+  max-width: 420px;
+  line-height: 1.6;
+}
+
 /* =================== BUTTONS =================== */
 .btn {
   display: inline-flex;
@@ -281,14 +320,14 @@ html, body {
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .btn-primary { background: var(--blue); color: #fff; }
-.btn-primary:hover { background: var(--blue-dim); }
+.btn-primary:hover:not(:disabled) { background: var(--blue-dim); }
 
 .btn-ghost {
   background: var(--bg-card2);
   color: var(--text-dim);
   border: 1px solid var(--border);
 }
-.btn-ghost:hover { background: var(--border); }
+.btn-ghost:hover:not(:disabled) { background: var(--border); }
 
 .icon-btn {
   display: inline-flex; align-items: center; justify-content: center;
@@ -485,6 +524,7 @@ html, body {
   border-color: var(--blue);
   box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
 }
+.field-input::placeholder { color: var(--text-muted); font-size: 13px; }
 .field-input option { background: var(--bg-card); color: var(--text); }
 
 /* =================== ALERTS =================== */
@@ -612,7 +652,6 @@ html, body {
 .spin { animation: spin 0.9s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* =================== MISC =================== */
 /* =================== REBALANCING TOTAL ROW =================== */
 .data-table tfoot .total-row td {
   padding: 12px 12px;
@@ -621,6 +660,7 @@ html, body {
   font-size: 14px;
 }
 
+/* =================== MISC =================== */
 .hint-text {
   font-size: 12px;
   color: var(--text-muted);
@@ -648,10 +688,7 @@ html, body {
 .recharts-cartesian-axis-tick-value { fill: var(--text-muted) !important; }
 .recharts-legend-item-text { color: var(--text-dim) !important; font-size: 12px !important; }
 
-
 /* =================== SNAPSHOT LEGEND =================== */
-/* Aggiungere in fondo a styles.css                        */
-
 .snapshot-legend {
   display: flex;
   flex-wrap: wrap;
@@ -676,19 +713,11 @@ html, body {
   cursor: pointer;
   transition: opacity 0.15s, background 0.15s;
 }
-
-.legend-item:hover {
-  background: var(--border);
-}
-
-.legend-item--hidden {
-  opacity: 0.35;
-  text-decoration: line-through;
-}
+.legend-item:hover { background: var(--border); }
+.legend-item--hidden { opacity: 0.35; text-decoration: line-through; }
 
 .legend-dot {
-  width: 8px;
-  height: 8px;
+  width: 8px; height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
 }

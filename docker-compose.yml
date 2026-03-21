@@ -1,0 +1,20 @@
+version: "3.9"
+
+services:
+  portfolio-tracker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: portfolio-tracker
+    ports:
+      - "3000:10000"        # http://localhost:3000 → app
+    volumes:
+      - portfolio-data:/app/data   # persist snapshots across restarts
+    environment:
+      - NODE_ENV=production
+      - PORT=10000
+    restart: unless-stopped
+
+volumes:
+  portfolio-data:
+    driver: local

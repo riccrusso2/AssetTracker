@@ -128,7 +128,7 @@ const buildChartData = (snapshots) => {
   const base = snapshots[0];
   const baseTotal = base.totalValue || 1;
   const baseByAssetId = {};
-  (base.assets || []).forEach((a) => { baseByAssetId[a.id] = a.price || 1; });
+  (base.assets || []).forEach((a) => { baseByAssetId[a.id] = a.value || 1; });
   const assetIdSet = new Set();
   snapshots.forEach((s) => (s.assets || []).forEach((a) => assetIdSet.add(a.id)));
   const assetIds = [...assetIdSet];
@@ -136,8 +136,8 @@ const buildChartData = (snapshots) => {
     const point = { label: snap.label };
     point["__total__"] = r2(((snap.totalValue || 0) / baseTotal) * 100);
     (snap.assets || []).forEach((a) => {
-      const b = baseByAssetId[a.id] || a.price || 1;
-      point[a.id] = r2(((a.price || 0) / b) * 100);
+      const b = baseByAssetId[a.id] || a.value || 1;
+      point[a.id] = r2(((a.value || 0) / b) * 100);
     });
     return point;
   });

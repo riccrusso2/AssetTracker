@@ -1,4 +1,4 @@
-// App.js — Portfolio Tracker — Generic Edition
+// App.js — Portfolio Tracker — Production-ready, no default data
 import React, {
   useCallback, useEffect, useMemo, useRef, useState,
 } from "react";
@@ -13,50 +13,54 @@ import {
   Edit2, Moon, Sun, Download, Search, X, AlertTriangle,
   Activity, LayoutDashboard, Briefcase, Plus, CheckCircle,
   Shield, ChevronUp, ChevronDown, Wallet, Camera, Upload,
-  Settings, DollarSign,
+  Settings, Tag,
 } from "lucide-react";
 import "./styles.css";
 
 // ====================== CONSTANTS ======================
 const STORAGE_KEYS = {
-  ASSETS:   "pft.assets.v1",
-  DARK_MODE:"pft.dark.v1",
-  CASH:     "pft.cash.v1",
+  ASSETS:         "pf.assets.v6",
+  STARTUP:        "pf.startup.v3",
+  PRIVATE_EQUITY: "pf.pe.v3",
+  DARK_MODE:      "pf.dark.v1",
+  CASH:           "pf.cash.v2",
+  ASSET_CLASSES:  "pf.assetclasses.v1",
 };
 
-const CONFIG_VERSION  = 1;
+const CONFIG_VERSION  = 2;
 const AUTO_REFRESH_MS = 900_000; // 15 min
 
-const MONTH_LABELS = [
-  "Jan","Feb","Mar","Apr","May","Jun",
-  "Jul","Aug","Sep","Oct","Nov","Dec",
+const MONTH_LABELS_IT = [
+  "Gen","Feb","Mar","Apr","Mag","Giu",
+  "Lug","Ago","Set","Ott","Nov","Dic",
 ];
 
-const ASSET_CLASSES = [
-  "ETF","Stock","Commodity","Crypto","Bond","Private Equity","Real Estate","Other",
+// Default asset classes (user can modify/delete/add)
+const DEFAULT_ASSET_CLASSES = [
+  "ETF", "Azione", "Commodity", "Crypto", "Bond", "Altro",
 ];
 
 // ====================== UTILITIES ======================
-const r2  = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
-const uid = ()  => Math.random().toString(36).slice(2, 10);
+const r2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
 
 const fmt = (n, compact = false) => {
   if (n == null || Number.isNaN(n)) return "—";
   try {
     if (compact && Math.abs(n) >= 10_000) {
-      return new Intl.NumberFormat("en-US", {
+      return new Intl.NumberFormat("it-IT", {
         style: "currency", currency: "EUR",
         notation: "compact", maximumFractionDigits: 1,
       }).format(n);
     }
-    return new Intl.NumberFormat("en-US", {
+    return new Intl.NumberFormat("it-IT", {
       style: "currency", currency: "EUR", maximumFractionDigits: 2,
     }).format(n);
   } catch { return n.toFixed(2) + " €"; }
 };
 
 const fmtPct = (n) => (n == null ? "—" : (n >= 0 ? "+" : "") + n.toFixed(2) + "%");
-const isISIN = (v) => /^[A-Z0-9]{12}$/i.test((v || "").trim());
+const isISIN  = (v) => /^[A-Z0-9]{12}$/i.test((v || "").trim());
+const uid     = ()  => Math.random().toString(36).slice(2, 10);
 
 const ls = {
   get: (key, def) => {
@@ -192,7 +196,11 @@ const calcProjectionScenarios = (start, monthly, baseReturn, years) => {
   let vb = start, vp = start, vo = start;
   for (let i = 0; i <= months; i++) {
     if (i % 12 === 0) data.push({ year: i / 12, base: r2(vb), pessimistic: r2(vp), optimistic: r2(vo) });
-    if (i < months) { vb = vb * (1 + m) + monthly; vp = vp * (1 + mp) + monthly; vo = vo * (1 + mo) + monthly; }
+    if (i < months) {
+      vb = vb * (1 + m)  + monthly;
+      vp = vp * (1 + mp) + monthly;
+      vo = vo * (1 + mo) + monthly;
+    }
   }
   return data;
 };
@@ -219,12 +227,12 @@ const calcRebalancing = (assets, totalVal, budget) => {
     let allocated = 0;
     for (const i of eligible) {
       const proportional = (actions[i].tgtW / sumEligTgt) * remaining;
-      const room = actions[i].delta - buy[i];
+      const room         = actions[i].delta - buy[i];
       if (proportional >= room) { buy[i] = actions[i].delta; allocated += room; }
       else { buy[i] += proportional; allocated += proportional; nextEligible.push(i); }
     }
     remaining -= allocated;
-    eligible = nextEligible;
+    eligible   = nextEligible;
   }
   if (remaining > 0.005) {
     const sumAllTgt = actions.reduce((acc, a) => acc + a.tgtW, 0);
@@ -236,30 +244,32 @@ const calcRebalancing = (assets, totalVal, budget) => {
   if (Math.abs(roundDiff) > 0) { const maxIdx = rounded.indexOf(Math.max(...rounded)); rounded[maxIdx] = r2(rounded[maxIdx] + roundDiff); }
   return {
     actions: actions.map((a, i) => ({
-      ...a,
-      monthlyBuy: rounded[i],
+      ...a, monthlyBuy: rounded[i],
       monthlyQty: a.lastPrice && rounded[i] > 0 ? r2(rounded[i] / a.lastPrice) : 0,
     })),
   };
 };
 
 const exportCSV = (assets) => {
-  const header = "Name,ISIN/Ticker,Quantity,Avg Buy Price,Current Price,Value,P&L €,P&L %,Asset Class";
+  const header = "Nome,ISIN,Quantità,Prezzo Acquisto,Prezzo Attuale,Valore,Perf €,Perf %,Asset Class";
   const rows = assets.map((a) => {
-    const v   = a.lastPrice ? r2(a.lastPrice * (a.quantity || 0)) : 0;
-    const pE  = a.costBasis && a.lastPrice ? r2((a.lastPrice - a.costBasis) * (a.quantity || 0)) : 0;
-    const pPct= a.costBasis && a.lastPrice ? r2(((a.lastPrice - a.costBasis) / a.costBasis) * 100) : 0;
+    const v    = a.lastPrice ? r2(a.lastPrice * (a.quantity || 0)) : 0;
+    const pE   = a.costBasis && a.lastPrice ? r2((a.lastPrice - a.costBasis) * (a.quantity || 0)) : 0;
+    const pPct = a.costBasis && a.lastPrice ? r2(((a.lastPrice - a.costBasis) / a.costBasis) * 100) : 0;
     return [a.name, a.identifier || "", a.quantity || 0, a.costBasis || 0,
       a.lastPrice || 0, v, pE, pPct + "%", a.assetClass || ""].join(",");
   });
   const blob = new Blob([[header, ...rows].join("\n")], { type: "text/csv" });
-  const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
-  a.download = `portfolio_${new Date().toISOString().slice(0, 10)}.csv`; a.click();
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `portfolio_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
 };
 
 // ====================== COLORS ======================
 const PALETTE = ["#3b82f6","#10b981","#f59e0b","#ef4444","#8b5cf6",
-                 "#14b8a6","#f97316","#22c55e","#e879f9","#60a5fa"];
+                 "#14b8a6","#f97316","#22c55e","#e879f9","#60a5fa",
+                 "#a78bfa","#fb923c","#34d399","#f472b6","#38bdf8"];
 
 const TOTAL_LINE_COLOR       = "#ffffff";
 const TOTAL_LINE_COLOR_LIGHT = "#1e293b";
@@ -303,21 +313,93 @@ const RiskCard = ({ label, value, fmt: fmtFn, tooltip, quality }) => {
   );
 };
 
-// ---- Empty State ----
+// ---- Empty State Component ----
 const EmptyState = ({ icon: Icon, title, description, action }) => (
   <div className="empty-state">
-    <div className="empty-icon"><Icon size={32} /></div>
-    <h3 className="empty-title">{title}</h3>
-    <p className="empty-desc">{description}</p>
-    {action && <button className="btn btn-primary" onClick={action.onClick}><Plus size={15}/>{action.label}</button>}
+    <div className="empty-icon"><Icon size={28} /></div>
+    <div className="empty-title">{title}</div>
+    <div className="empty-desc">{description}</div>
+    {action && <div style={{ marginTop: 16 }}>{action}</div>}
   </div>
 );
 
-// ---- Asset Modal ----
-const AssetModal = ({ asset, onSave, onClose }) => {
+// ---- Asset Class Manager Modal ----
+const AssetClassModal = ({ classes, onSave, onClose }) => {
+  const [list, setList] = useState([...classes]);
+  const [newName, setNewName] = useState("");
+  const [editIdx, setEditIdx] = useState(null);
+  const [editVal, setEditVal] = useState("");
+
+  const addNew = () => {
+    const trimmed = newName.trim();
+    if (!trimmed || list.includes(trimmed)) return;
+    setList([...list, trimmed]);
+    setNewName("");
+  };
+
+  const startEdit = (i) => { setEditIdx(i); setEditVal(list[i]); };
+  const saveEdit  = () => {
+    if (!editVal.trim()) return;
+    const next = [...list];
+    next[editIdx] = editVal.trim();
+    setList(next);
+    setEditIdx(null);
+    setEditVal("");
+  };
+  const remove = (i) => setList(list.filter((_, idx) => idx !== i));
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
+        <div className="modal-header">
+          <h3><Tag size={16} style={{ marginRight: 8 }}/>Gestisci Asset Class</h3>
+          <button className="icon-btn" onClick={onClose}><X size={18}/></button>
+        </div>
+        <div className="modal-body" style={{ gap: 8, maxHeight: 360, overflowY: "auto" }}>
+          {list.map((cls, i) => (
+            <div key={i} className="ac-row">
+              {editIdx === i ? (
+                <>
+                  <input className="field-input" style={{ flex: 1 }} value={editVal}
+                    onChange={(e) => setEditVal(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && saveEdit()} autoFocus/>
+                  <button className="btn btn-primary" style={{ padding: "6px 12px" }} onClick={saveEdit}><CheckCircle size={14}/></button>
+                  <button className="btn btn-ghost" style={{ padding: "6px 12px" }} onClick={() => setEditIdx(null)}><X size={14}/></button>
+                </>
+              ) : (
+                <>
+                  <span className="ac-name">{cls}</span>
+                  <button className="icon-btn" onClick={() => startEdit(i)}><Edit2 size={13}/></button>
+                  <button className="icon-btn danger" onClick={() => remove(i)}><Trash2 size={13}/></button>
+                </>
+              )}
+            </div>
+          ))}
+          <div className="ac-row" style={{ marginTop: 8, borderTop: "1px solid var(--border)", paddingTop: 12 }}>
+            <input className="field-input" style={{ flex: 1 }} placeholder="Nuova asset class…"
+              value={newName} onChange={(e) => setNewName(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && addNew()}/>
+            <button className="btn btn-primary" style={{ padding: "6px 12px" }} onClick={addNew}>
+              <Plus size={14}/> Aggiungi
+            </button>
+          </div>
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-ghost" onClick={onClose}>Annulla</button>
+          <button className="btn btn-primary" onClick={() => { onSave(list); onClose(); }}>
+            <CheckCircle size={15}/> Salva
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ---- Modal ETF / Asset ----
+const AssetModal = ({ asset, assetClasses, onSave, onClose }) => {
   const [form, setForm] = useState(asset || {
     name: "", identifier: "", quantity: "", costBasis: "",
-    targetWeight: "", assetClass: "ETF", currency: "EUR",
+    targetWeight: "", assetClass: assetClasses[0] || "ETF", currency: "EUR",
   });
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -329,8 +411,8 @@ const AssetModal = ({ asset, onSave, onClose }) => {
       quantity:     parseFloat(form.quantity)     || 0,
       costBasis:    parseFloat(form.costBasis)    || 0,
       targetWeight: parseFloat(form.targetWeight) || 0,
-      lastPrice:    form.lastPrice    ?? null,
-      lastUpdated:  form.lastUpdated  ?? null,
+      lastPrice:    form.lastPrice ?? null,
+      lastUpdated:  form.lastUpdated ?? null,
     });
     onClose();
   };
@@ -339,43 +421,37 @@ const AssetModal = ({ asset, onSave, onClose }) => {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h3>{asset?.id ? "Edit Asset" : "Add Asset"}</h3>
+          <h3>{asset?.id ? "Modifica asset" : "Aggiungi asset"}</h3>
           <button className="icon-btn" onClick={onClose}><X size={18}/></button>
         </div>
         <div className="modal-body">
           {[
-            { label: "Name",              key: "name",         type: "text",   placeholder: "e.g. iShares MSCI World" },
-            { label: "ISIN / Ticker",     key: "identifier",   type: "text",   placeholder: "e.g. IE00B4L5Y983" },
-            { label: "Quantity",          key: "quantity",     type: "number", placeholder: "e.g. 10" },
-            { label: "Avg Buy Price (€)", key: "costBasis",    type: "number", placeholder: "e.g. 80.00" },
-            { label: "Target Weight (%)", key: "targetWeight", type: "number", placeholder: "e.g. 40" },
-          ].map(({ label, key, type, placeholder }) => (
+            { label: "Nome *",                  key: "name",         type: "text" },
+            { label: "ISIN / Ticker",           key: "identifier",   type: "text" },
+            { label: "Quantità *",              key: "quantity",     type: "number" },
+            { label: "Prezzo medio carico (€) *", key: "costBasis",  type: "number" },
+            { label: "Peso target (%)",         key: "targetWeight", type: "number" },
+          ].map(({ label, key, type }) => (
             <label key={key} className="field-label">
               {label}
-              <input type={type} value={form[key] ?? ""} placeholder={placeholder}
-                onChange={(e) => set(key, e.target.value)} className="field-input" step="any"/>
+              <input type={type} value={form[key] ?? ""} onChange={(e) => set(key, e.target.value)}
+                className="field-input" step="any"/>
             </label>
           ))}
           <label className="field-label">
             Asset Class
             <select value={form.assetClass} onChange={(e) => set("assetClass", e.target.value)} className="field-input">
-              {ASSET_CLASSES.map((c) => <option key={c}>{c}</option>)}
+              {assetClasses.map((c) => <option key={c}>{c}</option>)}
             </select>
           </label>
-          {/* Manual price override for non-ISIN assets */}
-          <label className="field-label">
-            Current Price (€) — optional override
-            <input type="number" step="any" value={form.lastPrice ?? ""}
-              placeholder="Leave empty to fetch automatically"
-              onChange={(e) => set("lastPrice", e.target.value === "" ? null : parseFloat(e.target.value))}
-              className="field-input"/>
-          </label>
+          <p className="hint-text" style={{ marginTop: 0 }}>
+            Se inserisci un ISIN valido, il prezzo sarà aggiornato automaticamente via JustETF.
+          </p>
         </div>
         <div className="modal-footer">
-          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={handleSave}
-            disabled={!form.name || !form.quantity || !form.costBasis}>
-            <CheckCircle size={15}/> Save
+          <button className="btn btn-ghost" onClick={onClose}>Annulla</button>
+          <button className="btn btn-primary" onClick={handleSave} disabled={!form.name || !form.quantity || !form.costBasis}>
+            <CheckCircle size={15}/> Salva
           </button>
         </div>
       </div>
@@ -383,8 +459,94 @@ const AssetModal = ({ asset, onSave, onClose }) => {
   );
 };
 
-// ---- Custom Recharts tooltip ----
-const CustomTooltip = ({ active, payload, label, currency = true }) => {
+// ---- Modal Startup ----
+const StartupModal = ({ startup, onSave, onClose }) => {
+  const [form, setForm] = useState(startup || { name: "", invested: "", fee: "" });
+  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  const handleSave = () => {
+    if (!form.name || !form.invested) return;
+    onSave({ id: form.id || uid(), name: form.name,
+      invested: parseFloat(form.invested) || 0, fee: parseFloat(form.fee) || 0 });
+    onClose();
+  };
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3>{startup?.id ? "Modifica startup" : "Aggiungi startup"}</h3>
+          <button className="icon-btn" onClick={onClose}><X size={18}/></button>
+        </div>
+        <div className="modal-body">
+          <label className="field-label">Nome *
+            <input type="text" value={form.name} onChange={(e) => set("name", e.target.value)} className="field-input"/>
+          </label>
+          <label className="field-label">Importo investito (€) *
+            <input type="number" step="any" value={form.invested} onChange={(e) => set("invested", e.target.value)} className="field-input"/>
+          </label>
+          <label className="field-label">Commissioni (€)
+            <input type="number" step="any" value={form.fee} onChange={(e) => set("fee", e.target.value)} className="field-input"/>
+          </label>
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-ghost" onClick={onClose}>Annulla</button>
+          <button className="btn btn-primary" onClick={handleSave} disabled={!form.name || !form.invested}>
+            <CheckCircle size={15}/> Salva
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ---- Modal Private Equity ----
+const PEModal = ({ pe, onSave, onClose }) => {
+  const [form, setForm] = useState(pe || { name: "", identifier: "", costBasis: "", lastPrice: "" });
+  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  const handleSave = () => {
+    if (!form.name || !form.costBasis) return;
+    onSave({
+      id: form.id || uid(), name: form.name, identifier: form.identifier || "",
+      costBasis: parseFloat(form.costBasis) || 0,
+      lastPrice: parseFloat(form.lastPrice) || parseFloat(form.costBasis) || 0,
+      targetWeight: 0, assetClass: "Private Equity", manual: true,
+    });
+    onClose();
+  };
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3>{pe?.id ? "Modifica ELTIF / PE" : "Aggiungi ELTIF / Private Equity"}</h3>
+          <button className="icon-btn" onClick={onClose}><X size={18}/></button>
+        </div>
+        <div className="modal-body">
+          <label className="field-label">Nome *
+            <input type="text" value={form.name} onChange={(e) => set("name", e.target.value)} className="field-input"/>
+          </label>
+          <label className="field-label">ISIN
+            <input type="text" value={form.identifier} onChange={(e) => set("identifier", e.target.value)} className="field-input"/>
+          </label>
+          <label className="field-label">Prezzo acquisto (€) *
+            <input type="number" step="any" value={form.costBasis} onChange={(e) => set("costBasis", e.target.value)} className="field-input"/>
+          </label>
+          <label className="field-label">Prezzo attuale (€)
+            <input type="number" step="any" value={form.lastPrice} onChange={(e) => set("lastPrice", e.target.value)} className="field-input"
+              placeholder="Se vuoto, usa prezzo acquisto"/>
+          </label>
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-ghost" onClick={onClose}>Annulla</button>
+          <button className="btn btn-primary" onClick={handleSave} disabled={!form.name || !form.costBasis}>
+            <CheckCircle size={15}/> Salva
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ---- Custom Tooltip ----
+const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   return (
     <div className="chart-tooltip">
@@ -392,7 +554,7 @@ const CustomTooltip = ({ active, payload, label, currency = true }) => {
       {payload.map((p, i) => (
         <div key={i} className="tooltip-row">
           <span style={{ color: p.color }}>{p.name}</span>
-          <span>{currency ? fmt(p.value) : p.value?.toFixed(2) + "%"}</span>
+          <span>{fmt(p.value)}</span>
         </div>
       ))}
     </div>
@@ -406,33 +568,21 @@ const SnapshotTooltip = ({ active, payload, label, snapshots }) => {
     <div className="chart-tooltip" style={{ minWidth: 200, maxHeight: 320, overflowY: "auto" }}>
       <div className="tooltip-label">{label}</div>
       {payload.map((p, i) => {
-        if (p.dataKey === "__total__") {
-          return (
-            <div key={i} className="tooltip-row">
-              <span style={{ color: p.color, fontWeight: 700 }}>Portfolio</span>
-              <span style={{ fontWeight: 700 }}>
-                {p.value?.toFixed(1)} &nbsp;
-                <span style={{ color: "var(--text-muted)", fontSize: 11 }}>
-                  ({snap ? fmt(snap.totalValue) : ""})
-                </span>
-              </span>
-            </div>
-          );
-        }
+        if (p.dataKey === "__total__") return (
+          <div key={i} className="tooltip-row">
+            <span style={{ color: p.color, fontWeight: 700 }}>Portafoglio</span>
+            <span style={{ fontWeight: 700 }}>{p.value?.toFixed(1)} <span style={{ color: "var(--text-muted)", fontSize: 11 }}>({snap ? fmt(snap.totalValue) : ""})</span></span>
+          </div>
+        );
         const assetSnap = snap?.assets?.find((a) => a.id === p.dataKey);
         return (
           <div key={i} className="tooltip-row">
             <span style={{ color: p.color }}>{p.name}</span>
-            <span>
-              {p.value?.toFixed(1)} &nbsp;
-              <span style={{ color: "var(--text-muted)", fontSize: 11 }}>
-                ({assetSnap ? fmt(assetSnap.price) : ""})
-              </span>
-            </span>
+            <span>{p.value?.toFixed(1)} <span style={{ color: "var(--text-muted)", fontSize: 11 }}>({assetSnap ? fmt(assetSnap.price) : ""})</span></span>
           </div>
         );
       })}
-      <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 6 }}>Index 100 = first snapshot</div>
+      <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 6 }}>Indice 100 = primo snapshot</div>
     </div>
   );
 };
@@ -447,20 +597,18 @@ const useLS = (key, init) => {
 const usePriceFetcher = () => {
   const [loading, setLoading] = useState({});
   const [error,   setError]   = useState(null);
-
   const fetchOne = useCallback(async (a) => {
     setLoading((s) => ({ ...s, [a.id]: true }));
     setError(null);
     try {
-      // If asset has a manually set price, skip fetch
-      if (a.manual || a.manualPrice) return { price: a.lastPrice, currency: "EUR", ts: Date.now() };
+      if (a.manual) return { price: a.lastPrice, ts: Date.now() };
       const isin = (a.identifier || "").trim();
-      if (!isISIN(isin)) throw new Error(`Invalid ISIN: ${isin}`);
+      if (!isISIN(isin)) throw new Error(`ISIN non valido: ${isin}`);
       const res  = await fetch(`/api/quote?isin=${encodeURIComponent(isin)}`);
-      if (!res.ok) throw new Error(`Fetch error: ${res.status}`);
+      if (!res.ok) throw new Error(`Errore fetch: ${res.status}`);
       const data = await res.json();
-      if (!data.latestQuote?.raw) throw new Error(`No data for ${isin}`);
-      return { price: parseFloat(data.latestQuote.raw), currency: "EUR", ts: Date.now() };
+      if (!data.latestQuote?.raw) throw new Error(`Nessun dato per ${isin}`);
+      return { price: parseFloat(data.latestQuote.raw), ts: Date.now() };
     } catch (e) {
       setError(e.message);
       return { price: null };
@@ -468,54 +616,59 @@ const usePriceFetcher = () => {
       setLoading((s) => { const c = { ...s }; delete c[a.id]; return c; });
     }
   }, []);
-
   return { fetchOne, loading, error };
 };
 
 // ====================== TABS ======================
 const TABS = [
-  { id: "overview",    label: "Overview",     icon: LayoutDashboard },
-  { id: "portfolio",   label: "Portfolio",    icon: Briefcase },
-  { id: "analytics",   label: "Analytics",   icon: BarChart2 },
-  { id: "projection",  label: "Projection",  icon: LineChartIcon },
-  { id: "rebalancing", label: "Rebalancing", icon: Target },
+  { id: "overview",    label: "Overview",        icon: LayoutDashboard },
+  { id: "portfolio",   label: "Portafoglio",     icon: Briefcase },
+  { id: "analytics",   label: "Analisi",         icon: BarChart2 },
+  { id: "projection",  label: "Proiezione",      icon: LineChartIcon },
+  { id: "rebalancing", label: "Ribilanciamento", icon: Target },
 ];
 
 // ====================== MAIN APP ======================
 export default function App() {
   // ---- State ----
-  const [dark,      setDark]   = useLS(STORAGE_KEYS.DARK_MODE, true);
-  const [assets,    setAssets] = useLS(STORAGE_KEYS.ASSETS,    []);  // starts empty
-  const [totalCash, setCash]   = useLS(STORAGE_KEYS.CASH,      0);
+  const [dark,         setDark]    = useLS(STORAGE_KEYS.DARK_MODE, true);
+  const [assets,       setAssets]  = useLS(STORAGE_KEYS.ASSETS, []);
+  const [pe,           setPE]      = useLS(STORAGE_KEYS.PRIVATE_EQUITY, []);
+  const [startups,     setSU]      = useLS(STORAGE_KEYS.STARTUP, []);
+  const [totalCash,    setCash]    = useLS(STORAGE_KEYS.CASH, 0);
+  const [assetClasses, setAC]      = useLS(STORAGE_KEYS.ASSET_CLASSES, DEFAULT_ASSET_CLASSES);
 
-  const [snapshots,      setSnapshots]      = useState([]);
-  const [snapshotSaving, setSnapshotSaving] = useState(false);
-  const [snapshotMsg,    setSnapshotMsg]    = useState(null);
+  const [snapshots,      setSnapshots]    = useState([]);
+  const [snapshotSaving, setSnapSaving]   = useState(false);
+  const [snapshotMsg,    setSnapMsg]      = useState(null);
 
-  const [hiddenLines, setHiddenLines] = useState(new Set());
-  const [tab,         setTab]         = useState("overview");
-  const [search,      setSearch]      = useState("");
+  const [hiddenLines,  setHiddenLines]  = useState(new Set());
+  const [tab,          setTab]          = useState("overview");
+  const [search,       setSearch]       = useState("");
 
-  const [assetModal, setAssetModal] = useState(null);
-  const [editCash,   setEditCash]   = useState(false);
-  const [cashInput,  setCashInput]  = useState("");
-  const [configMsg,  setConfigMsg]  = useState(null);
+  const [assetModal,   setAssetModal]   = useState(null);
+  const [startupModal, setStartupModal] = useState(null);
+  const [peModal,      setPEModal]      = useState(null);
+  const [acModal,      setACModal]      = useState(false);
+  const [editCash,     setEditCash]     = useState(false);
+  const [cashInput,    setCashInput]    = useState("");
+  const [configMsg,    setConfigMsg]    = useState(null);
 
   const [projYears,   setProjY] = useState(10);
   const [projReturn,  setProjR] = useState(7);
   const [projMonthly, setProjM] = useState(500);
-  const [monthBudget, setBudget]= useState(500);
+  const [monthBudget, setBudget] = useState(500);
 
   const { fetchOne, loading, error } = usePriceFetcher();
   const assetsRef = useRef(assets);
   useEffect(() => { assetsRef.current = assets; }, [assets]);
 
-  // ---- Dark mode ----
+  // Dark mode
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
   }, [dark]);
 
-  // ---- Load snapshots from backend ----
+  // Load snapshots from server
   useEffect(() => {
     fetch("/api/snapshots")
       .then((r) => r.json())
@@ -524,28 +677,28 @@ export default function App() {
   }, []);
 
   // ---- Derived ----
-  const totals    = useMemo(() => calcTotals(assets),              [assets]);
+  const totals    = useMemo(() => calcTotals(assets), [assets]);
   const weights   = useMemo(() => calcWeights(assets, totals.val), [assets, totals.val]);
-  const classDist = useMemo(() => calcClassDist(assets),           [assets]);
-  const drift     = useMemo(() => calcDrift(assets, totals.val),   [assets, totals.val]);
+  const classDist = useMemo(() => calcClassDist(assets), [assets]);
+  const drift     = useMemo(() => calcDrift(assets, totals.val), [assets, totals.val]);
 
-  const grandTotal = totals.val + totalCash;
+  const peTotal    = useMemo(() => pe.reduce((a, f) => a + (f.lastPrice || 0), 0), [pe]);
+  const suTotal    = useMemo(() => startups.reduce((a, s) => a + (s.invested || 0), 0), [startups]);
+  const suFees     = useMemo(() => startups.reduce((a, s) => a + (s.fee || 0), 0), [startups]);
+  const grandTotal = totals.val + totalCash + peTotal + suTotal;
 
   const fullClassDist = useMemo(() => {
     const base = [...classDist];
-    if (totalCash > 0) base.push({ name: "Cash", value: r2(totalCash) });
+    if (suTotal > 0)   base.push({ name: "Startup",        value: r2(suTotal) });
+    if (peTotal > 0)   base.push({ name: "Private Equity", value: r2(peTotal) });
+    if (totalCash > 0) base.push({ name: "Liquidità",      value: r2(totalCash) });
     return base;
-  }, [classDist, totalCash]);
+  }, [classDist, suTotal, peTotal, totalCash]);
 
-  const rebalance = useMemo(() =>
-    calcRebalancing(assets, totals.val, monthBudget),
-    [assets, totals.val, monthBudget]
-  );
+  const rebalance = useMemo(() => calcRebalancing(assets, totals.val, monthBudget), [assets, totals.val, monthBudget]);
 
-  const projData = useMemo(() =>
-    calcProjectionScenarios(grandTotal, projMonthly, projReturn, projYears),
-    [grandTotal, projMonthly, projReturn, projYears]
-  );
+  const projData = useMemo(() => calcProjectionScenarios(grandTotal, projMonthly, projReturn, projYears),
+    [grandTotal, projMonthly, projReturn, projYears]);
 
   const finalVal     = projData.at(-1)?.base ?? 0;
   const totalContrib = grandTotal + projMonthly * 12 * projYears;
@@ -554,8 +707,7 @@ export default function App() {
 
   const histForRisk = useMemo(() =>
     snapshots.map((s) => ({ t: s.savedAt || `${s.year}-${String(s.month).padStart(2,"0")}-01`, v: s.totalValue })),
-    [snapshots]
-  );
+    [snapshots]);
 
   const riskMetrics = useMemo(() => ({
     cagr:    calcCAGR(histForRisk),
@@ -565,10 +717,7 @@ export default function App() {
     sortino: calcSortino(histForRisk),
   }), [histForRisk]);
 
-  const { data: snapshotChartData, assetIds } = useMemo(
-    () => buildChartData(snapshots),
-    [snapshots]
-  );
+  const { data: snapshotChartData, assetIds } = useMemo(() => buildChartData(snapshots), [snapshots]);
 
   const assetNameMap = useMemo(() => {
     const m = {};
@@ -577,40 +726,31 @@ export default function App() {
   }, [assets]);
 
   const perfBarData = useMemo(() =>
-    assets
-      .filter((a) => a.lastPrice && a.costBasis)
-      .map((a) => ({
-        name:  a.name.split(" ").slice(0, 3).join(" "),
-        value: r2(((a.lastPrice - a.costBasis) / a.costBasis) * 100),
-      }))
+    assets.filter((a) => a.lastPrice && a.costBasis)
+      .map((a) => ({ name: a.name.split(" ").slice(0, 3).join(" "),
+        value: r2(((a.lastPrice - a.costBasis) / a.costBasis) * 100) }))
       .sort((a, b) => b.value - a.value),
-    [assets]
-  );
+    [assets]);
 
   const weightBarData = useMemo(() =>
-    weights.map((w) => ({
-      name:    w.name.split(" ").slice(0, 3).join(" "),
-      current: r2(w.weight),
-      target:  w.target,
-    })).filter((w) => w.target > 0 || w.current > 0.5),
-    [weights]
-  );
+    weights.map((w) => ({ name: w.name.split(" ").slice(0, 3).join(" "),
+      current: r2(w.weight), target: w.target }))
+    .filter((w) => w.target > 0 || w.current > 0.5),
+    [weights]);
 
   const filteredAssets = useMemo(() =>
     search.trim()
       ? assets.filter((a) =>
           a.name.toLowerCase().includes(search.toLowerCase()) ||
-          (a.identifier || "").toLowerCase().includes(search.toLowerCase())
-        )
+          (a.identifier || "").toLowerCase().includes(search.toLowerCase()))
       : assets,
-    [assets, search]
-  );
+    [assets, search]);
 
   // ---- Actions ----
   const fetchAllPrices = useCallback(async () => {
     if (!assetsRef.current?.length) return;
     const updated = await Promise.all(
-      (assetsRef.current || []).map(async (a) => {
+      assetsRef.current.map(async (a) => {
         const res = await fetchOne(a);
         return res.price != null
           ? { ...a, lastPrice: res.price, lastUpdated: new Date().toISOString() }
@@ -625,20 +765,15 @@ export default function App() {
     if (assets.length > 0) fetchAllPrices();
     intervalRef.current = setInterval(fetchAllPrices, AUTO_REFRESH_MS);
     return () => clearInterval(intervalRef.current);
-  }, [fetchAllPrices]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // ---- Monthly Snapshot ----
+  // ---- Snapshot ----
   const saveMonthlySnapshot = useCallback(async () => {
-    const missing = assets.filter((a) => !a.manual && !a.manualPrice && !a.lastPrice).map((a) => a.name);
-    if (missing.length > 0) {
-      setSnapshotMsg({ type: "err", text: `Missing prices: ${missing.join(", ")}` });
-      setTimeout(() => setSnapshotMsg(null), 5000);
-      return;
-    }
     const now = new Date();
     const month = now.getMonth() + 1;
     const year  = now.getFullYear();
-    const label = `${MONTH_LABELS[month - 1]} ${year}`;
+    const label = `${MONTH_LABELS_IT[month - 1]} ${year}`;
     const snapshotData = {
       label, month, year,
       totalValue: r2(grandTotal),
@@ -647,31 +782,32 @@ export default function App() {
         quantity: a.quantity, value: r2((a.lastPrice || 0) * (a.quantity || 0)),
       })),
     };
-    setSnapshotSaving(true);
-    setSnapshotMsg(null);
+    setSnapSaving(true);
+    setSnapMsg(null);
     try {
-      const res = await fetch("/api/snapshot", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      const res  = await fetch("/api/snapshot", {
+        method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify(snapshotData),
       });
       const json = await res.json();
-      if (!json.ok) throw new Error("Invalid server response");
+      if (!json.ok) throw new Error("Risposta non valida");
       const updated = await fetch("/api/snapshots").then((r) => r.json());
       if (Array.isArray(updated)) setSnapshots(updated);
-      setSnapshotMsg({ type: "ok", text: `✓ Snapshot "${label}" saved (${json.total} total)` });
+      setSnapMsg({ type: "ok", text: `✓ Snapshot "${label}" salvato` });
     } catch (e) {
-      setSnapshotMsg({ type: "err", text: `Error: ${e.message}` });
+      setSnapMsg({ type: "err", text: `Errore: ${e.message}` });
     } finally {
-      setSnapshotSaving(false);
-      setTimeout(() => setSnapshotMsg(null), 5000);
+      setSnapSaving(false);
+      setTimeout(() => setSnapMsg(null), 5000);
     }
   }, [assets, grandTotal]);
 
   const exportSnapshotsFile = useCallback(() => {
     const blob = new Blob([JSON.stringify(snapshots, null, 2)], { type: "application/json" });
-    const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
-    a.download = `snapshots_backup_${new Date().toISOString().slice(0, 10)}.json`; a.click();
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `snapshots_${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
     URL.revokeObjectURL(a.href);
   }, [snapshots]);
 
@@ -679,226 +815,237 @@ export default function App() {
   const importSnapshots = useCallback(async (file) => {
     if (!file) return;
     try {
-      const text = await file.text();
-      const parsed = JSON.parse(text);
-      if (!Array.isArray(parsed)) throw new Error("File must contain an array of snapshots.");
-      setSnapshotMsg({ type: "ok", text: "Importing…" });
+      const parsed = JSON.parse(await file.text());
+      if (!Array.isArray(parsed)) throw new Error("Il file non contiene un array di snapshot.");
       let count = 0;
       for (const snap of parsed) {
-        const res = await fetch("/api/snapshot", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(snap) });
-        const json = await res.json();
-        if (json.ok) count++;
+        const res  = await fetch("/api/snapshot", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(snap),
+        });
+        if ((await res.json()).ok) count++;
       }
       const updated = await fetch("/api/snapshots").then((r) => r.json());
       if (Array.isArray(updated)) setSnapshots(updated);
-      setSnapshotMsg({ type: "ok", text: `✓ Imported ${count} snapshots` });
+      setSnapMsg({ type: "ok", text: `✓ Importati ${count} snapshot` });
     } catch (e) {
-      setSnapshotMsg({ type: "err", text: `Import error: ${e.message}` });
+      setSnapMsg({ type: "err", text: `Errore: ${e.message}` });
     } finally {
-      setTimeout(() => setSnapshotMsg(null), 5000);
+      setTimeout(() => setSnapMsg(null), 5000);
     }
   }, []);
 
-  // ---- Config Export / Import ----
+  // ---- Config export/import ----
   const exportConfig = useCallback(() => {
-    const config = { version: CONFIG_VERSION, exportedAt: new Date().toISOString(), totalCash, assets };
+    const config = { version: CONFIG_VERSION, exportedAt: new Date().toISOString(),
+      totalCash, assets, startups, pe, assetClasses };
     const blob = new Blob([JSON.stringify(config, null, 2)], { type: "application/json" });
-    const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
-    a.download = `portfolio_config_${new Date().toISOString().slice(0, 10)}.json`; a.click();
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `portfolio_config_${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
     URL.revokeObjectURL(a.href);
-    showConfigMsg("ok", "✓ Configuration exported");
-  }, [assets, totalCash]);
+    showCfgMsg("ok", "✓ Configurazione esportata");
+  }, [assets, startups, pe, totalCash, assetClasses]);
 
   const configImportRef = useRef(null);
   const importConfig = useCallback(async (file) => {
     if (!file) return;
     try {
-      const text   = await file.text();
-      const config = JSON.parse(text);
+      const config = JSON.parse(await file.text());
       if (!config.version || !Array.isArray(config.assets))
-        throw new Error("Invalid file: missing 'version' or 'assets'.");
-      setAssets(config.assets);
+        throw new Error("File non valido.");
+      if (Array.isArray(config.assets))       setAssets(config.assets);
+      if (Array.isArray(config.startups))     setSU(config.startups);
+      if (Array.isArray(config.pe))           setPE(config.pe);
       if (typeof config.totalCash === "number") setCash(config.totalCash);
-      showConfigMsg("ok", `✓ Configuration imported (${config.exportedAt?.slice(0,10) ?? "?"})`);
+      if (Array.isArray(config.assetClasses)) setAC(config.assetClasses);
+      showCfgMsg("ok", `✓ Configurazione importata (${config.exportedAt?.slice(0,10) ?? "?"})`);
     } catch (e) {
-      showConfigMsg("err", `Error: ${e.message}`);
+      showCfgMsg("err", `Errore: ${e.message}`);
     }
   }, []);
 
-  const showConfigMsg = (type, text) => {
+  const showCfgMsg = (type, text) => {
     setConfigMsg({ type, text });
     setTimeout(() => setConfigMsg(null), 5000);
   };
 
   // ---- CRUD ----
-  const saveAsset = (a) => {
-    setAssets((prev) => {
-      const idx = prev.findIndex((x) => x.id === a.id);
-      return idx >= 0 ? prev.map((x) => x.id === a.id ? a : x) : [...prev, a];
-    });
-  };
+  const saveAsset = (a) => setAssets((prev) => {
+    const idx = prev.findIndex((x) => x.id === a.id);
+    return idx >= 0 ? prev.map((x) => x.id === a.id ? a : x) : [...prev, a];
+  });
+  const saveSU = (s) => setSU((prev) => {
+    const idx = prev.findIndex((x) => x.id === s.id);
+    return idx >= 0 ? prev.map((x) => x.id === s.id ? s : x) : [...prev, s];
+  });
+  const savePE = (p) => setPE((prev) => {
+    const idx = prev.findIndex((x) => x.id === p.id);
+    return idx >= 0 ? prev.map((x) => x.id === p.id ? p : x) : [...prev, p];
+  });
+
   const deleteAsset = (id) => setAssets((prev) => prev.filter((a) => a.id !== id));
+  const deleteSU    = (id) => setSU((prev) => prev.filter((s) => s.id !== id));
+  const deletePE    = (id) => setPE((prev) => prev.filter((p) => p.id !== id));
 
   const isLoading = Object.keys(loading).length > 0;
+  const toggleLine = (dataKey) => setHiddenLines((prev) => {
+    const next = new Set(prev); next.has(dataKey) ? next.delete(dataKey) : next.add(dataKey); return next;
+  });
 
-  const toggleLine = (dataKey) => {
-    setHiddenLines((prev) => {
-      const next = new Set(prev);
-      next.has(dataKey) ? next.delete(dataKey) : next.add(dataKey);
-      return next;
-    });
-  };
-
-  const tabLoading = isLoading && (
-    <span className="loading-dot-row">
-      <span className="loading-dot"/><span className="loading-dot"/><span className="loading-dot"/>
-    </span>
-  );
+  const isEmpty = assets.length === 0 && pe.length === 0 && startups.length === 0 && totalCash === 0;
 
   // ====================== TAB: OVERVIEW ======================
   const renderOverview = () => (
     <div className="tab-content">
-      {assets.length === 0 ? (
-        <EmptyState
-          icon={Briefcase}
-          title="Your portfolio is empty"
-          description="Add your first asset to start tracking your investments. Go to the Portfolio tab to get started."
-          action={{ label: "Add Asset", onClick: () => setTab("portfolio") }}
-        />
+      {isEmpty ? (
+        <div className="welcome-card">
+          <div className="welcome-icon">📊</div>
+          <h2 className="welcome-title">Benvenuto in Portfolio Tracker</h2>
+          <p className="welcome-desc">
+            Inizia aggiungendo i tuoi investimenti dalla sezione <strong>Portafoglio</strong>.
+            Puoi aggiungere ETF, azioni, startup, private equity e liquidità.
+          </p>
+          <button className="btn btn-primary" onClick={() => setTab("portfolio")} style={{ fontSize: 15, padding: "10px 24px" }}>
+            <Plus size={16}/> Inizia ad aggiungere asset
+          </button>
+          <div className="welcome-features">
+            <div className="wf-item"><span>📈</span> Prezzi live via JustETF</div>
+            <div className="wf-item"><span>🎯</span> Ribilanciamento automatico</div>
+            <div className="wf-item"><span>📷</span> Snapshot mensili</div>
+            <div className="wf-item"><span>🔮</span> Proiezioni future</div>
+            <div className="wf-item"><span>🛡️</span> Metriche di rischio</div>
+            <div className="wf-item"><span>💾</span> Backup configurazione</div>
+          </div>
+        </div>
       ) : (
         <>
           <div className="grid-4">
-            <KpiCard label="Total Portfolio"   value={fmt(grandTotal, true)} icon={Wallet}
-              sub={`Cash: ${fmt(totalCash)}`} color="blue" />
-            <KpiCard label="Invested Assets"   value={fmt(totals.val, true)} icon={Activity}
-              trend={totals.ret * 100} color="blue" />
-            <KpiCard label="Total Return"
+            <KpiCard label="Patrimonio totale" value={fmt(grandTotal, true)} icon={Wallet}
+              sub={`Liquidità: ${fmt(totalCash)}`} color="blue"/>
+            <KpiCard label="ETF & Asset quotati" value={fmt(totals.val, true)} icon={Activity}
+              trend={totals.ret * 100} color="blue"/>
+            <KpiCard label="Rendimento totale"
               value={fmtPct(totals.ret * 100)}
-              sub={`${totals.val - totals.cost >= 0 ? "+" : ""}${fmt(totals.val - totals.cost)}`}
-              color={totals.ret >= 0 ? "green" : "red"} />
-            <KpiCard label="Portfolio Drift"
+              sub={totals.val - totals.cost !== 0 ? `${totals.val - totals.cost >= 0 ? "+" : ""}${fmt(totals.val - totals.cost)}` : ""}
+              color={totals.ret >= 0 ? "green" : "red"}/>
+            <KpiCard label="Drift portafoglio"
               value={drift.toFixed(1) + "%"}
-              sub={drift > 10 ? "⚠ Rebalancing advised" : "✓ On target"}
-              color={drift > 10 ? "amber" : "green"} icon={Target} />
+              sub={drift > 10 ? "⚠ Ribilanciamento consigliato" : "✓ Allineato ai target"}
+              color={drift > 10 ? "amber" : "green"} icon={Target}/>
           </div>
 
           {snapshots.length > 2 && (
             <div className="section-card">
-              <h3 className="section-title"><Shield size={16}/> Risk Metrics</h3>
+              <h3 className="section-title"><Shield size={16}/> Metriche di rischio</h3>
               <div className="grid-5">
                 <RiskCard label="CAGR"          value={riskMetrics.cagr}
-                  fmtFn={(v) => fmtPct(v * 100)} tooltip="Compound Annual Growth Rate"
-                  quality={riskMetrics.cagr > 0.05 ? "good" : "bad"} />
-                <RiskCard label="Volatility"    value={riskMetrics.vol}
-                  fmtFn={(v) => fmtPct(v * 100)} tooltip="Annualized volatility"
-                  quality={riskMetrics.vol < 0.2 ? "good" : "bad"} />
+                  fmtFn={(v) => fmtPct(v * 100)} tooltip="Tasso di crescita annuo composto"
+                  quality={riskMetrics.cagr > 0.05 ? "good" : "bad"}/>
+                <RiskCard label="Volatilità"    value={riskMetrics.vol}
+                  fmtFn={(v) => fmtPct(v * 100)} tooltip="Volatilità annualizzata"
+                  quality={riskMetrics.vol < 0.2 ? "good" : "bad"}/>
                 <RiskCard label="Max Drawdown"  value={riskMetrics.mdd}
-                  fmtFn={(v) => fmtPct(v * 100)} tooltip="Maximum loss from peak"
-                  quality={riskMetrics.mdd > -0.15 ? "good" : "bad"} />
+                  fmtFn={(v) => fmtPct(v * 100)} tooltip="Perdita massima dal picco"
+                  quality={riskMetrics.mdd > -0.15 ? "good" : "bad"}/>
                 <RiskCard label="Sharpe Ratio"  value={riskMetrics.sharpe}
-                  fmtFn={(v) => v.toFixed(2)} tooltip="(Return - Rf) / Volatility. >1 is excellent"
-                  quality={riskMetrics.sharpe > 1 ? "good" : riskMetrics.sharpe > 0 ? "neutral" : "bad"} />
+                  fmtFn={(v) => v.toFixed(2)} tooltip=">1 ottimo"
+                  quality={riskMetrics.sharpe > 1 ? "good" : riskMetrics.sharpe > 0 ? "neutral" : "bad"}/>
                 <RiskCard label="Sortino Ratio" value={riskMetrics.sortino}
-                  fmtFn={(v) => v.toFixed(2)} tooltip="Like Sharpe but only penalizes downside vol"
-                  quality={riskMetrics.sortino > 1 ? "good" : riskMetrics.sortino > 0 ? "neutral" : "bad"} />
+                  fmtFn={(v) => v.toFixed(2)} tooltip="Penalizza solo la volatilità negativa"
+                  quality={riskMetrics.sortino > 1 ? "good" : riskMetrics.sortino > 0 ? "neutral" : "bad"}/>
               </div>
-              <p className="hint-text">⚠ Metrics calculated on {snapshots.length} monthly snapshots.</p>
+              <p className="hint-text">⚠ Metriche calcolate su {snapshots.length} snapshot mensili. Servono almeno 3 snapshot.</p>
             </div>
           )}
 
           <div className="grid-3">
             <div className="section-card">
-              <h3 className="section-title"><TrendingUp size={16}/> Best Performer</h3>
-              {totals.best ? (
-                <><div className="big-name">{totals.best.name}</div><Badge value={totals.best.perf * 100} /></>
-              ) : <p className="muted">Insufficient data</p>}
+              <h3 className="section-title"><TrendingUp size={16}/> Miglior performer</h3>
+              {totals.best
+                ? <><div className="big-name">{totals.best.name}</div><Badge value={totals.best.perf * 100}/></>
+                : <p className="muted">Nessun dato disponibile</p>}
             </div>
             <div className="section-card">
-              <h3 className="section-title"><TrendingDown size={16}/> Worst Performer</h3>
-              {totals.worst ? (
-                <><div className="big-name">{totals.worst.name}</div><Badge value={totals.worst.perf * 100} /></>
-              ) : <p className="muted">Insufficient data</p>}
+              <h3 className="section-title"><TrendingDown size={16}/> Peggior performer</h3>
+              {totals.worst
+                ? <><div className="big-name">{totals.worst.name}</div><Badge value={totals.worst.perf * 100}/></>
+                : <p className="muted">Nessun dato disponibile</p>}
             </div>
             <div className="section-card">
-              <h3 className="section-title"><BarChart2 size={16}/> Composition</h3>
-              <div className="stat-row"><span>Invested Assets</span><strong>{fmt(totals.val)}</strong></div>
-              <div className="stat-row"><span>Cash</span><strong>{fmt(totalCash)}</strong></div>
-              <div className="stat-row"><span>Total Assets</span><strong>{assets.length}</strong></div>
+              <h3 className="section-title"><BarChart2 size={16}/> Composizione</h3>
+              <div className="stat-row"><span>ETF / Asset quotati</span><strong>{fmt(totals.val)}</strong></div>
+              <div className="stat-row"><span>Startup</span><strong>{fmt(suTotal)}</strong></div>
+              <div className="stat-row"><span>Private Equity</span><strong>{fmt(peTotal)}</strong></div>
+              <div className="stat-row"><span>Liquidità</span><strong>{fmt(totalCash)}</strong></div>
             </div>
           </div>
 
           <div className="grid-2">
-            <div className="section-card">
-              <h3 className="section-title"><PieChartIcon size={16}/> Asset Allocation</h3>
-              <div style={{ height: 280 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={fullClassDist} dataKey="value" nameKey="name"
-                      cx="50%" cy="50%" outerRadius={95} innerRadius={45}
-                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                      labelLine={false}>
-                      {fullClassDist.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]}/>)}
-                    </Pie>
-                    <ReTooltip formatter={(v, n) => [fmt(v), n]}/>
-                  </PieChart>
-                </ResponsiveContainer>
+            {fullClassDist.length > 0 && (
+              <div className="section-card">
+                <h3 className="section-title"><PieChartIcon size={16}/> Asset allocation</h3>
+                <div style={{ height: 280 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={fullClassDist} dataKey="value" nameKey="name"
+                        cx="50%" cy="50%" outerRadius={95} innerRadius={45}
+                        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                        labelLine={false}>
+                        {fullClassDist.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]}/>)}
+                      </Pie>
+                      <ReTooltip formatter={(v, n) => [fmt(v), n]}/>
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
-            </div>
+            )}
 
-            {/* Snapshot chart */}
             <div className="section-card">
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-                <h3 className="section-title" style={{ margin: 0 }}>
-                  <LineChartIcon size={16}/> Monthly Price History
-                </h3>
+                <h3 className="section-title" style={{ margin: 0 }}><LineChartIcon size={16}/> Storico prezzi mensile</h3>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                   {snapshotMsg && (
-                    <span style={{ fontSize: 12, color: snapshotMsg.type === "ok" ? "var(--green)" : "var(--red)",
-                      maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <span style={{ fontSize: 12, color: snapshotMsg.type === "ok" ? "var(--green)" : "var(--red)" }}>
                       {snapshotMsg.text}
                     </span>
                   )}
                   <input ref={importSnapshotsRef} type="file" accept=".json" style={{ display: "none" }}
                     onChange={(e) => { importSnapshots(e.target.files[0]); e.target.value = ""; }}/>
-                  <button className="btn btn-ghost" onClick={() => importSnapshotsRef.current?.click()}
-                    style={{ fontSize: 12, padding: "6px 12px" }}>
-                    <Download size={13} style={{ transform: "rotate(180deg)" }}/> Import
+                  <button className="btn btn-ghost" onClick={() => importSnapshotsRef.current?.click()} style={{ fontSize: 12, padding: "6px 12px" }}>
+                    <Upload size={13}/> Importa
                   </button>
-                  <button className="btn btn-ghost" onClick={exportSnapshotsFile} disabled={snapshots.length === 0}
-                    style={{ fontSize: 12, padding: "6px 12px" }}>
-                    <Download size={13}/> Export{snapshots.length > 0 ? ` (${snapshots.length})` : ""}
+                  <button className="btn btn-ghost" onClick={exportSnapshotsFile} disabled={snapshots.length === 0} style={{ fontSize: 12, padding: "6px 12px" }}>
+                    <Download size={13}/> Esporta{snapshots.length > 0 ? ` (${snapshots.length})` : ""}
                   </button>
                   <button className="btn btn-primary" onClick={saveMonthlySnapshot}
-                    disabled={snapshotSaving || isLoading || assets.length === 0}
-                    style={{ fontSize: 12, padding: "6px 12px" }}>
-                    <Camera size={13}/> {snapshotSaving ? "Saving…" : "Monthly Snapshot"}
+                    disabled={snapshotSaving || isLoading || assets.length === 0} style={{ fontSize: 12, padding: "6px 12px" }}>
+                    <Camera size={13}/> {snapshotSaving ? "Salvataggio…" : "Snapshot mensile"}
                   </button>
                 </div>
               </div>
-
               {snapshotChartData.length === 0 ? (
                 <div className="chart-empty" style={{ height: 280 }}>
                   <div style={{ textAlign: "center" }}>
-                    <p className="muted" style={{ marginBottom: 8 }}>No snapshots yet.</p>
-                    <p className="muted" style={{ fontSize: 12 }}>Press <strong>Monthly Snapshot</strong> once a month to track history.</p>
+                    <p className="muted" style={{ marginBottom: 8 }}>Nessuno snapshot registrato.</p>
+                    <p className="muted" style={{ fontSize: 12 }}>Premi <strong>Snapshot mensile</strong> ogni mese per tracciare l'andamento.</p>
                   </div>
                 </div>
               ) : (
                 <>
-                  <div style={{ height: 280 }}>
+                  <div style={{ height: 260 }}>
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart data={snapshotChartData} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="var(--border)"/>
                         <XAxis dataKey="label" tick={{ fontSize: 10 }} stroke="var(--text-muted)"/>
-                        <YAxis tickFormatter={(v) => v + ""} tick={{ fontSize: 10 }} stroke="var(--text-muted)"
-                          domain={["auto","auto"]}
-                          label={{ value: "Index (base 100)", angle: -90, position: "insideLeft",
-                                   style: { fontSize: 10, fill: "var(--text-muted)" }, offset: 10 }}/>
+                        <YAxis tickFormatter={(v) => v + ""} tick={{ fontSize: 10 }} stroke="var(--text-muted)" domain={["auto","auto"]}
+                          label={{ value: "Indice (base 100)", angle: -90, position: "insideLeft",
+                            style: { fontSize: 10, fill: "var(--text-muted)" }, offset: 10 }}/>
                         <ReTooltip content={<SnapshotTooltip snapshots={snapshots}/>}/>
-                        <Line type="monotone" dataKey="__total__" name="Portfolio"
+                        <Line type="monotone" dataKey="__total__" name="Portafoglio"
                           stroke={dark ? TOTAL_LINE_COLOR : TOTAL_LINE_COLOR_LIGHT} strokeWidth={2.5}
-                          dot={{ r: 3, fill: dark ? TOTAL_LINE_COLOR : TOTAL_LINE_COLOR_LIGHT }}
-                          activeDot={{ r: 5 }} hide={hiddenLines.has("__total__")}/>
+                          dot={{ r: 3 }} activeDot={{ r: 5 }} hide={hiddenLines.has("__total__")}/>
                         {assetIds.map((id, i) => (
                           <Line key={id} type="monotone" dataKey={id} name={assetNameMap[id] || id}
                             stroke={PALETTE[i % PALETTE.length]} strokeWidth={1.5}
@@ -910,16 +1057,13 @@ export default function App() {
                   </div>
                   <div className="snapshot-legend">
                     <button className={`legend-item ${hiddenLines.has("__total__") ? "legend-item--hidden" : ""}`}
-                      onClick={() => toggleLine("__total__")}
-                      style={{ "--line-color": dark ? TOTAL_LINE_COLOR : TOTAL_LINE_COLOR_LIGHT }}>
+                      onClick={() => toggleLine("__total__")}>
                       <span className="legend-dot" style={{ background: dark ? TOTAL_LINE_COLOR : TOTAL_LINE_COLOR_LIGHT }}/>
-                      Portfolio
+                      Portafoglio
                     </button>
                     {assetIds.map((id, i) => (
-                      <button key={id}
-                        className={`legend-item ${hiddenLines.has(id) ? "legend-item--hidden" : ""}`}
-                        onClick={() => toggleLine(id)}
-                        style={{ "--line-color": PALETTE[i % PALETTE.length] }}>
+                      <button key={id} className={`legend-item ${hiddenLines.has(id) ? "legend-item--hidden" : ""}`}
+                        onClick={() => toggleLine(id)}>
                         <span className="legend-dot" style={{ background: PALETTE[i % PALETTE.length] }}/>
                         {assetNameMap[id] || id}
                       </button>
@@ -937,15 +1081,13 @@ export default function App() {
   // ====================== TAB: PORTFOLIO ======================
   const renderPortfolio = () => (
     <div className="tab-content">
-      {/* Config Export / Import */}
-      <div className="section-card" style={{ borderColor: "var(--blue)", borderWidth: 1 }}>
+      {/* Config export/import */}
+      <div className="section-card" style={{ borderColor: "var(--blue)" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
           <div>
-            <h3 className="section-title" style={{ margin: 0 }}>
-              <Settings size={16}/> Portfolio Configuration
-            </h3>
+            <h3 className="section-title" style={{ margin: 0 }}><Settings size={16}/> Configurazione portafoglio</h3>
             <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-              Export your full portfolio (assets + cash) to a JSON file. Import it on any device to restore your setup.
+              Esporta e importa tutta la tua configurazione (asset, startup, PE, liquidità, asset class) in un file JSON.
             </p>
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
@@ -957,28 +1099,25 @@ export default function App() {
             <input ref={configImportRef} type="file" accept=".json" style={{ display: "none" }}
               onChange={(e) => { importConfig(e.target.files[0]); e.target.value = ""; }}/>
             <button className="btn btn-ghost" onClick={() => configImportRef.current?.click()}>
-              <Upload size={15}/> Import Config
+              <Upload size={15}/> Importa
             </button>
-            <button className="btn btn-primary" onClick={exportConfig} disabled={assets.length === 0}>
-              <Download size={15}/> Export Config
+            <button className="btn btn-primary" onClick={exportConfig}>
+              <Download size={15}/> Esporta configurazione
             </button>
           </div>
         </div>
       </div>
 
-      {/* Cash */}
+      {/* Liquidità */}
       <div className="section-card">
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <h2 className="section-title" style={{ margin: 0 }}><Wallet size={16}/> Cash / Liquidity</h2>
+          <h2 className="section-title" style={{ margin: 0 }}><Wallet size={16}/> Liquidità</h2>
           {!editCash ? (
-            <button className="icon-btn" onClick={() => { setCashInput(totalCash); setEditCash(true); }}>
-              <Edit2 size={14}/>
-            </button>
+            <button className="icon-btn" onClick={() => { setCashInput(totalCash); setEditCash(true); }}><Edit2 size={14}/></button>
           ) : (
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <input type="number" step="any" value={cashInput}
-                onChange={(e) => setCashInput(e.target.value)}
-                className="field-input" style={{ width: 140 }} placeholder="0.00"/>
+              <input type="number" step="any" value={cashInput} onChange={(e) => setCashInput(e.target.value)}
+                className="field-input" style={{ width: 140 }}/>
               <button className="btn btn-primary" onClick={() => { setCash(parseFloat(cashInput) || 0); setEditCash(false); }}>
                 <CheckCircle size={14}/> OK
               </button>
@@ -988,60 +1127,50 @@ export default function App() {
         </div>
         {!editCash && (
           <div style={{ fontSize: "1.6rem", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", marginTop: 8 }}>
-            {fmt(totalCash)}
+            {totalCash > 0 ? fmt(totalCash) : <span className="muted" style={{ fontSize: "1rem" }}>Clicca la matita per inserire la liquidità</span>}
           </div>
         )}
       </div>
 
-      {/* Assets Table */}
+      {/* ETF & Asset */}
       <div className="section-card">
         <div className="table-controls" style={{ marginBottom: 12 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <h2 className="section-title" style={{ margin: 0 }}><Briefcase size={16}/> Assets</h2>
-            {assets.length > 0 && (
-              <span className="muted" style={{ fontSize: 13 }}>Total: <strong>{fmt(totals.val)}</strong></span>
-            )}
+            <h2 className="section-title" style={{ margin: 0 }}><Briefcase size={16}/> ETF & Asset quotati</h2>
+            {totals.val > 0 && <span className="muted" style={{ fontSize: 13 }}>Totale: <strong>{fmt(totals.val)}</strong></span>}
           </div>
           <div className="btn-row">
-            {assets.length > 0 && (
-              <>
-                <div className="search-wrap" style={{ maxWidth: 260 }}>
-                  <Search size={15} className="search-icon"/>
-                  <input className="search-input" placeholder="Search…"
-                    value={search} onChange={(e) => setSearch(e.target.value)}/>
-                  {search && <button className="icon-btn" onClick={() => setSearch("")}><X size={14}/></button>}
-                </div>
-                <button className="btn btn-ghost" onClick={() => exportCSV(assets)}>
-                  <Download size={15}/> CSV
-                </button>
-                <button className="btn btn-ghost" onClick={fetchAllPrices} disabled={isLoading}>
-                  <RefreshCw size={14} className={isLoading ? "spin" : ""}/>
-                  {isLoading ? "Refreshing…" : "Refresh Prices"}
-                </button>
-              </>
-            )}
-            <button className="btn btn-primary" onClick={() => setAssetModal({})}>
-              <Plus size={15}/> Add Asset
+            <button className="btn btn-ghost" onClick={() => setACModal(true)} title="Gestisci asset class">
+              <Tag size={15}/> Asset class
             </button>
+            {assets.length > 0 && (
+              <div className="search-wrap" style={{ maxWidth: 260 }}>
+                <Search size={15} className="search-icon"/>
+                <input className="search-input" placeholder="Cerca…" value={search} onChange={(e) => setSearch(e.target.value)}/>
+                {search && <button className="icon-btn" onClick={() => setSearch("")}><X size={14}/></button>}
+              </div>
+            )}
+            {assets.length > 0 && (
+              <button className="btn btn-ghost" onClick={() => exportCSV(assets)}><Download size={15}/> CSV</button>
+            )}
+            <button className="btn btn-primary" onClick={() => setAssetModal({})}><Plus size={15}/> Aggiungi asset</button>
           </div>
         </div>
 
         {assets.length === 0 ? (
-          <EmptyState
-            icon={DollarSign}
-            title="No assets yet"
-            description='Click "Add Asset" to add your first investment. You can add ETFs, stocks, crypto, bonds, or any other asset class.'
-          />
+          <EmptyState icon={Briefcase} title="Nessun asset ancora"
+            description="Aggiungi ETF, azioni o altri strumenti finanziari quotati. Il prezzo sarà aggiornato automaticamente se inserisci un ISIN valido."
+            action={<button className="btn btn-primary" onClick={() => setAssetModal({})}><Plus size={15}/> Aggiungi il primo asset</button>}/>
         ) : (
           <div className="table-wrap">
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Name</th><th>ISIN / Ticker</th><th className="num">Qty</th>
-                  <th className="num">Buy Price</th><th className="num">Current Price</th>
-                  <th className="num">Value</th><th className="num">P&amp;L €</th>
-                  <th className="num">P&amp;L %</th><th className="num">Weight</th>
-                  <th className="num">Target</th><th>Class</th><th></th>
+                  <th>Nome</th><th>ISIN</th><th className="num">Quantità</th>
+                  <th className="num">P. Acquisto</th><th className="num">P. Attuale</th>
+                  <th className="num">Valore</th><th className="num">Perf €</th>
+                  <th className="num">Perf %</th><th className="num">Peso</th>
+                  <th className="num">Target</th><th>Classe</th><th></th>
                 </tr>
               </thead>
               <tbody>
@@ -1060,12 +1189,12 @@ export default function App() {
                       <td className="mono muted">{a.identifier || "—"}</td>
                       <td className="num mono">{a.quantity}</td>
                       <td className="num mono">{fmt(a.costBasis)}</td>
-                      <td className="num mono">{a.lastPrice ? fmt(a.lastPrice) : "—"}</td>
-                      <td className="num mono"><strong>{fmt(value)}</strong></td>
+                      <td className="num mono">{a.lastPrice ? fmt(a.lastPrice) : <span className="muted">—</span>}</td>
+                      <td className="num mono"><strong>{value > 0 ? fmt(value) : "—"}</strong></td>
                       <td className={`num mono ${perfE >= 0 ? "pos-text" : "neg-text"}`}>
-                        {perfE >= 0 ? "+" : ""}{fmt(perfE)}
+                        {a.lastPrice && a.costBasis ? `${perfE >= 0 ? "+" : ""}${fmt(perfE)}` : "—"}
                       </td>
-                      <td className="num"><Badge value={perfP}/></td>
+                      <td className="num">{a.lastPrice && a.costBasis ? <Badge value={perfP}/> : "—"}</td>
                       <td className="num mono">{weight.toFixed(1)}%</td>
                       <td className="num">
                         <span className={`target-badge ${Math.abs(diff) > 3 ? (diff > 0 ? "over" : "under") : "ok"}`}>
@@ -1076,9 +1205,9 @@ export default function App() {
                       <td>
                         <div className="row-actions">
                           <button className="icon-btn" onClick={() => setAssetModal(a)}><Edit2 size={14}/></button>
-                          <button className="icon-btn danger" onClick={() => {
-                            if (window.confirm(`Remove ${a.name}?`)) deleteAsset(a.id);
-                          }}><Trash2 size={14}/></button>
+                          <button className="icon-btn danger" onClick={() => { if (window.confirm(`Rimuovere ${a.name}?`)) deleteAsset(a.id); }}>
+                            <Trash2 size={14}/>
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -1090,10 +1219,93 @@ export default function App() {
         )}
       </div>
 
-      <p className="hint-text" style={{ textAlign: "center" }}>
-        <Info size={12} style={{ display: "inline", verticalAlign: "middle", marginRight: 4 }}/>
-        Assets with a valid ISIN are automatically priced via JustETF. For other assets, set the current price manually.
-      </p>
+      {/* Startup */}
+      <div className="section-card">
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <h2 className="section-title" style={{ margin: 0 }}><Activity size={16}/> Investimenti Startup</h2>
+            {startups.length > 0 && (
+              <div className="kpi-mini-row" style={{ marginBottom: 0 }}>
+                <span>Totale: <strong>{fmt(suTotal)}</strong></span>
+                <span>Commissioni: <strong>{fmt(suFees)}</strong></span>
+              </div>
+            )}
+          </div>
+          <button className="btn btn-primary" onClick={() => setStartupModal({})}><Plus size={15}/> Aggiungi startup</button>
+        </div>
+        {startups.length === 0 ? (
+          <EmptyState icon={Activity} title="Nessuna startup"
+            description="Traccia gli investimenti in startup e fondi di venture capital. Inserisci l'importo investito e le eventuali commissioni."
+            action={<button className="btn btn-primary" onClick={() => setStartupModal({})}><Plus size={15}/> Aggiungi startup</button>}/>
+        ) : (
+          <div className="table-wrap">
+            <table className="data-table">
+              <thead><tr><th>Nome</th><th className="num">Importo investito</th><th className="num">Commissioni</th><th></th></tr></thead>
+              <tbody>
+                {startups.map((s) => (
+                  <tr key={s.id}>
+                    <td>{s.name}</td>
+                    <td className="num mono"><strong>{fmt(s.invested)}</strong></td>
+                    <td className="num mono">{fmt(s.fee)}</td>
+                    <td>
+                      <div className="row-actions">
+                        <button className="icon-btn" onClick={() => setStartupModal(s)}><Edit2 size={14}/></button>
+                        <button className="icon-btn danger" onClick={() => { if (window.confirm(`Rimuovere ${s.name}?`)) deleteSU(s.id); }}>
+                          <Trash2 size={14}/>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Private Equity */}
+      <div className="section-card">
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <h2 className="section-title" style={{ margin: 0 }}><Shield size={16}/> Private Equity (ELTIF)</h2>
+            {pe.length > 0 && <span className="muted" style={{ fontSize: 13 }}>Totale: <strong>{fmt(peTotal)}</strong></span>}
+          </div>
+          <button className="btn btn-primary" onClick={() => setPEModal({})}><Plus size={15}/> Aggiungi ELTIF</button>
+        </div>
+        {pe.length === 0 ? (
+          <EmptyState icon={Shield} title="Nessun fondo PE / ELTIF"
+            description="Aggiungi fondi di private equity, ELTIF o altri investimenti illiquidi. Il prezzo va aggiornato manualmente."
+            action={<button className="btn btn-primary" onClick={() => setPEModal({})}><Plus size={15}/> Aggiungi ELTIF</button>}/>
+        ) : (
+          <div className="table-wrap">
+            <table className="data-table">
+              <thead><tr><th>Nome</th><th>ISIN</th><th className="num">P. Acquisto</th><th className="num">P. Attuale</th><th className="num">Perf</th><th></th></tr></thead>
+              <tbody>
+                {pe.map((f) => {
+                  const perf = f.costBasis ? r2(((f.lastPrice - f.costBasis) / f.costBasis) * 100) : 0;
+                  return (
+                    <tr key={f.id}>
+                      <td>{f.name}</td>
+                      <td className="mono muted">{f.identifier || "—"}</td>
+                      <td className="num mono">{fmt(f.costBasis)}</td>
+                      <td className="num mono">{fmt(f.lastPrice)}</td>
+                      <td className="num"><Badge value={perf}/></td>
+                      <td>
+                        <div className="row-actions">
+                          <button className="icon-btn" onClick={() => setPEModal(f)}><Edit2 size={14}/></button>
+                          <button className="icon-btn danger" onClick={() => { if (window.confirm(`Rimuovere ${f.name}?`)) deletePE(f.id); }}>
+                            <Trash2 size={14}/>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 
@@ -1101,19 +1313,17 @@ export default function App() {
   const renderAnalytics = () => (
     <div className="tab-content">
       {assets.length === 0 ? (
-        <EmptyState
-          icon={BarChart2}
-          title="No data to analyze"
-          description="Add assets to your portfolio to see performance analytics, allocation charts, and drift indicators."
-          action={{ label: "Go to Portfolio", onClick: () => setTab("portfolio") }}
-        />
+        <EmptyState icon={BarChart2} title="Nessun dato da analizzare"
+          description="Aggiungi dei asset nella sezione Portafoglio per vedere i grafici di analisi."/>
       ) : (
         <>
           <div className="grid-2">
             <div className="section-card">
-              <h3 className="section-title"><BarChart2 size={16}/> Performance by Asset (%)</h3>
+              <h3 className="section-title"><BarChart2 size={16}/> Performance per asset (%)</h3>
               {perfBarData.length === 0 ? (
-                <p className="muted" style={{ textAlign: "center", padding: "40px 0" }}>Refresh prices to see performance data.</p>
+                <p className="muted" style={{ padding: "2rem 0", textAlign: "center" }}>
+                  Aggiorna i prezzi per vedere le performance.
+                </p>
               ) : (
                 <div style={{ height: 320 }}>
                   <ResponsiveContainer width="100%" height="100%">
@@ -1131,11 +1341,12 @@ export default function App() {
                 </div>
               )}
             </div>
-
             <div className="section-card">
-              <h3 className="section-title"><Target size={16}/> Current vs Target Weight (%)</h3>
+              <h3 className="section-title"><Target size={16}/> Peso attuale vs target (%)</h3>
               {weightBarData.length === 0 ? (
-                <p className="muted" style={{ textAlign: "center", padding: "40px 0" }}>Set target weights on your assets to see this chart.</p>
+                <p className="muted" style={{ padding: "2rem 0", textAlign: "center" }}>
+                  Imposta pesi target per gli asset per vedere il confronto.
+                </p>
               ) : (
                 <div style={{ height: 320 }}>
                   <ResponsiveContainer width="100%" height="100%">
@@ -1145,8 +1356,8 @@ export default function App() {
                       <YAxis type="category" dataKey="name" width={130} tick={{ fontSize: 11 }} stroke="var(--text-muted)"/>
                       <ReTooltip formatter={(v, n) => [v.toFixed(2) + "%", n]}/>
                       <Legend/>
-                      <Bar dataKey="current" name="Current Weight" fill="#3b82f6" radius={[0, 3, 3, 0]}/>
-                      <Bar dataKey="target"  name="Target Weight"  fill="#94a3b8" radius={[0, 3, 3, 0]}/>
+                      <Bar dataKey="current" name="Peso attuale" fill="#3b82f6" radius={[0, 3, 3, 0]}/>
+                      <Bar dataKey="target"  name="Peso target"  fill="#94a3b8" radius={[0, 3, 3, 0]}/>
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -1155,38 +1366,40 @@ export default function App() {
           </div>
 
           <div className="section-card">
-            <h3 className="section-title"><Activity size={16}/> Portfolio Drift Index</h3>
+            <h3 className="section-title"><Activity size={16}/> Indice di drift portafoglio</h3>
             <div className="drift-meter">
               <div className="drift-bar-wrap">
-                <div className="drift-bar-fill"
-                  style={{ width: `${Math.min(drift * 2, 100)}%`,
-                    background: drift < 5 ? "var(--green)" : drift < 15 ? "var(--amber)" : "var(--red)" }}/>
+                <div className="drift-bar-fill" style={{
+                  width: `${Math.min(drift * 2, 100)}%`,
+                  background: drift < 5 ? "var(--green)" : drift < 15 ? "var(--amber)" : "var(--red)"
+                }}/>
               </div>
               <div className="drift-labels">
                 <span>0%</span><span className="drift-value">{drift.toFixed(1)}%</span><span>50%+</span>
               </div>
             </div>
             <p className="hint-text">
-              {drift < 5 ? "✓ Portfolio is well aligned." : drift < 15 ? "⚠ Slight drift detected." : "🚨 High drift — rebalancing is recommended."}
-              {" "}Sum of absolute deviations between current and target weights.
+              {drift < 5 ? "✓ Portafoglio allineato ai target." : drift < 15 ? "⚠ Leggero drift dai target." : "🚨 Drift elevato: considera un ribilanciamento."}
             </p>
           </div>
 
-          <div className="section-card">
-            <h3 className="section-title"><PieChartIcon size={16}/> Distribution by Asset Class</h3>
-            <div style={{ height: 260 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={classDist} dataKey="value" nameKey="name"
-                    cx="50%" cy="50%" outerRadius={100} innerRadius={55}
-                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
-                    {classDist.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]}/>)}
-                  </Pie>
-                  <ReTooltip formatter={(v, n) => [fmt(v), n]}/>
-                </PieChart>
-              </ResponsiveContainer>
+          {classDist.length > 0 && (
+            <div className="section-card">
+              <h3 className="section-title"><PieChartIcon size={16}/> Distribuzione per asset class (ETF & Asset quotati)</h3>
+              <div style={{ height: 260 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={classDist} dataKey="value" nameKey="name"
+                      cx="50%" cy="50%" outerRadius={100} innerRadius={55}
+                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                      {classDist.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]}/>)}
+                    </Pie>
+                    <ReTooltip formatter={(v, n) => [fmt(v), n]}/>
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
             </div>
-          </div>
+          )}
         </>
       )}
     </div>
@@ -1196,12 +1409,12 @@ export default function App() {
   const renderProjection = () => (
     <div className="tab-content">
       <div className="section-card">
-        <h2 className="section-title"><LineChartIcon size={16}/> Growth Projection — Multiple Scenarios</h2>
+        <h2 className="section-title"><LineChartIcon size={16}/> Proiezione crescita — scenari multipli</h2>
         <div className="grid-3" style={{ marginBottom: "1.5rem" }}>
           {[
-            { label: "Base annual return (%)", val: projReturn,  set: setProjR, step: 0.5, min: 0, max: 30 },
-            { label: "Monthly contribution (€)", val: projMonthly, set: setProjM, step: 100, min: 0 },
-            { label: "Projection years",          val: projYears,   set: setProjY, step: 1,   min: 1, max: 50 },
+            { label: "Rendimento annuo base (%)", val: projReturn, set: setProjR, step: 0.5, min: 0, max: 30 },
+            { label: "Investimento mensile (€)",  val: projMonthly, set: setProjM, step: 100, min: 0 },
+            { label: "Anni di proiezione",         val: projYears,  set: setProjY, step: 1,   min: 1, max: 50 },
           ].map(({ label, val, set, step, min, max }) => (
             <label key={label} className="field-label">
               {label}
@@ -1210,46 +1423,36 @@ export default function App() {
             </label>
           ))}
         </div>
-
         <div className="grid-4" style={{ marginBottom: "1.5rem" }}>
-          <KpiCard label="Starting Value"          value={fmt(grandTotal, true)} color="blue"/>
-          <KpiCard label={`Projected (${projYears}y) — Base`}
-            value={fmt(projData.at(-1)?.base ?? 0, true)} color="green"/>
-          <KpiCard label="Projected — Optimistic (+3%)"
-            value={fmt(projData.at(-1)?.optimistic ?? 0, true)} color="green"/>
-          <KpiCard label="Expected Gain (base)"
-            value={fmt(projGain, true)} sub={`ROI: ${projROI.toFixed(1)}%`}
+          <KpiCard label="Valore iniziale" value={fmt(grandTotal, true)} color="blue"/>
+          <KpiCard label={`Proiettato (${projYears}a) — Base`} value={fmt(finalVal, true)} color="green"/>
+          <KpiCard label="Ottimistico (+3%)" value={fmt(projData.at(-1)?.optimistic ?? 0, true)} color="green"/>
+          <KpiCard label="Guadagno previsto" value={fmt(projGain, true)} sub={`ROI stimato: ${projROI.toFixed(1)}%`}
             color={projGain >= 0 ? "green" : "red"}/>
         </div>
-
         <div style={{ height: 380 }}>
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={projData}>
               <defs>
-                {[{ id: "gOpt", color: "#10b981" },{ id: "gBase", color: "#3b82f6" },{ id: "gPess", color: "#f59e0b" }]
-                  .map(({ id, color }) => (
-                    <linearGradient key={id} id={id} x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%"  stopColor={color} stopOpacity={0.2}/>
-                      <stop offset="95%" stopColor={color} stopOpacity={0}/>
-                    </linearGradient>
-                  ))}
+                {[{ id: "gOpt", color: "#10b981" },{ id: "gBase", color: "#3b82f6" },{ id: "gPess", color: "#f59e0b" }].map(({ id, color }) => (
+                  <linearGradient key={id} id={id} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={color} stopOpacity={0.2}/>
+                    <stop offset="95%" stopColor={color} stopOpacity={0}/>
+                  </linearGradient>
+                ))}
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border)"/>
-              <XAxis dataKey="year" label={{ value: "Years", position: "insideBottom", offset: -4 }}
-                tick={{ fontSize: 11 }} stroke="var(--text-muted)"/>
+              <XAxis dataKey="year" label={{ value: "Anni", position: "insideBottom", offset: -4 }} tick={{ fontSize: 11 }} stroke="var(--text-muted)"/>
               <YAxis tickFormatter={(v) => `€${(v/1000).toFixed(0)}k`} tick={{ fontSize: 11 }} stroke="var(--text-muted)"/>
               <ReTooltip content={<CustomTooltip/>}/>
               <Legend/>
-              <Area type="monotone" dataKey="optimistic" name={`Optimistic (+${projReturn+3}%)`}
-                stroke="#10b981" fill="url(#gOpt)" strokeWidth={2} dot={false}/>
-              <Area type="monotone" dataKey="base"       name={`Base (${projReturn}%)`}
-                stroke="#3b82f6" fill="url(#gBase)" strokeWidth={2.5} dot={false}/>
-              <Area type="monotone" dataKey="pessimistic" name={`Pessimistic (${Math.max(projReturn-3,0)}%)`}
-                stroke="#f59e0b" fill="url(#gPess)" strokeWidth={2} dot={false}/>
+              <Area type="monotone" dataKey="optimistic" name={`Ottimistico (+${projReturn + 3}%)`} stroke="#10b981" fill="url(#gOpt)" strokeWidth={2} dot={false}/>
+              <Area type="monotone" dataKey="base"        name={`Base (${projReturn}%)`}              stroke="#3b82f6" fill="url(#gBase)" strokeWidth={2.5} dot={false}/>
+              <Area type="monotone" dataKey="pessimistic" name={`Pessimistico (${Math.max(projReturn - 3, 0)}%)`} stroke="#f59e0b" fill="url(#gPess)" strokeWidth={2} dot={false}/>
             </AreaChart>
           </ResponsiveContainer>
         </div>
-        <p className="hint-text">Hypothetical projection only. Does not constitute financial advice.</p>
+        <p className="hint-text">⚠ Proiezione ipotetica basata su rendimento costante. Non costituisce consulenza finanziaria.</p>
       </div>
     </div>
   );
@@ -1258,41 +1461,30 @@ export default function App() {
   const renderRebalancing = () => (
     <div className="tab-content">
       {assets.length === 0 ? (
-        <EmptyState
-          icon={Target}
-          title="No assets to rebalance"
-          description="Add assets with target weights to get smart rebalancing suggestions based on your monthly budget."
-          action={{ label: "Add Assets", onClick: () => setTab("portfolio") }}
-        />
+        <EmptyState icon={Target} title="Nessun asset da ribilanciare"
+          description="Aggiungi asset con pesi target nella sezione Portafoglio per vedere i suggerimenti di ribilanciamento."/>
       ) : (
         <div className="section-card">
-          <h2 className="section-title"><Target size={16}/> Rebalancing Suggestions</h2>
+          <h2 className="section-title"><Target size={16}/> Suggerimenti di ribilanciamento</h2>
           <div className="kpi-mini-row" style={{ marginBottom: "1rem" }}>
             <label className="field-label" style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              Monthly budget available:
-              <input type="number" value={monthBudget}
-                onChange={(e) => setBudget(parseFloat(e.target.value) || 0)}
+              Budget mensile disponibile:
+              <input type="number" value={monthBudget} onChange={(e) => setBudget(parseFloat(e.target.value) || 0)}
                 step="100" min="0" className="field-input" style={{ width: 120 }}/>
             </label>
           </div>
-
           {drift > 5 && (
             <div className="alert alert-amber">
-              <AlertTriangle size={15}/> Drift of {drift.toFixed(1)}% — portfolio has moved away from targets.
+              <AlertTriangle size={15}/> Drift del {drift.toFixed(1)}% — il portafoglio si è allontanato dai target.
             </div>
           )}
-
           <div className="table-wrap">
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Asset</th>
-                  <th className="num">Current Weight</th>
-                  <th className="num">Target (norm.)</th>
-                  <th className="num">Delta €</th>
-                  <th className="num">Qty Δ</th>
-                  <th className="num">Monthly Buy</th>
-                  <th className="num">Buy Qty</th>
+                  <th>Asset</th><th className="num">Peso attuale</th><th className="num">Target (norm.)</th>
+                  <th className="num">Delta €</th><th className="num">Qty Δ</th>
+                  <th className="num">Acquisto mese</th><th className="num">Qty acquisto</th>
                 </tr>
               </thead>
               <tbody>
@@ -1312,15 +1504,14 @@ export default function App() {
               </tbody>
               <tfoot>
                 <tr className="total-row">
-                  <td colSpan={5}><strong>Total Monthly Buy</strong></td>
+                  <td colSpan={5}><strong>Totale acquisto mensile</strong></td>
                   <td className="num mono">
                     {(() => {
                       const total = r2(rebalance.actions.reduce((acc, x) => acc + (x.monthlyBuy || 0), 0));
                       const diff  = r2(Math.abs(total - monthBudget));
                       return (
                         <span className={diff > 0.02 ? "neg-text" : "pos-text"}>
-                          <strong>{fmt(total)}</strong>
-                          {diff > 0.02 ? ` ⚠ (diff: ${fmt(diff)})` : " ✓"}
+                          <strong>{fmt(total)}</strong>{diff > 0.02 ? ` ⚠` : " ✓"}
                         </span>
                       );
                     })()}
@@ -1331,7 +1522,7 @@ export default function App() {
             </table>
           </div>
           <p className="hint-text">
-            Target weights are normalized to 100%. Monthly budget is allocated first to underweight assets.
+            I pesi target vengono normalizzati a 100%. Il budget viene allocato prioritariamente agli asset sottopesati.
           </p>
         </div>
       )}
@@ -1343,24 +1534,34 @@ export default function App() {
     <div className={`app ${dark ? "dark" : "light"}`}>
       <header className="app-header">
         <div className="header-left">
-          <div className="logo-mark">PT</div>
+          <div className="logo-mark">PF</div>
           <div>
             <h1 className="app-title">Portfolio Tracker</h1>
             <p className="app-subtitle">
-              <Info size={12}/> Auto-refresh every 15 min
-              {isLoading && tabLoading}
+              <Info size={12}/> Aggiornamento automatico ogni 15 min
+              {isLoading && (
+                <span className="loading-dot-row">
+                  <span className="loading-dot"/><span className="loading-dot"/><span className="loading-dot"/>
+                </span>
+              )}
             </p>
           </div>
         </div>
         <div className="header-right">
-          {assets.length > 0 && (
+          {grandTotal > 0 && (
             <div className="grand-total">
-              <span className="gt-label">Total Portfolio</span>
+              <span className="gt-label">Patrimonio totale</span>
               <span className="gt-value">{fmt(grandTotal)}</span>
               {totals.ret !== 0 && <Badge value={totals.ret * 100}/>}
             </div>
           )}
-          <button className="icon-btn theme-toggle" onClick={() => setDark((d) => !d)} title="Toggle theme">
+          {assets.length > 0 && (
+            <button className="btn btn-primary" onClick={fetchAllPrices} disabled={isLoading}>
+              <RefreshCw size={14} className={isLoading ? "spin" : ""}/>
+              {isLoading ? "Aggiornamento…" : "Aggiorna prezzi"}
+            </button>
+          )}
+          <button className="icon-btn theme-toggle" onClick={() => setDark((d) => !d)} title="Cambia tema">
             {dark ? <Sun size={17}/> : <Moon size={17}/>}
           </button>
         </div>
@@ -1376,8 +1577,7 @@ export default function App() {
         {TABS.map((t) => {
           const Icon = t.icon;
           return (
-            <button key={t.id} className={`tab-btn ${tab === t.id ? "active" : ""}`}
-              onClick={() => setTab(t.id)}>
+            <button key={t.id} className={`tab-btn ${tab === t.id ? "active" : ""}`} onClick={() => setTab(t.id)}>
               <Icon size={15}/> {t.label}
             </button>
           );
@@ -1392,12 +1592,20 @@ export default function App() {
         {tab === "rebalancing" && renderRebalancing()}
       </main>
 
+      {/* Modali */}
       {assetModal !== null && (
-        <AssetModal
-          asset={assetModal?.id ? assetModal : null}
-          onSave={saveAsset}
-          onClose={() => setAssetModal(null)}
-        />
+        <AssetModal asset={assetModal?.id ? assetModal : null} assetClasses={assetClasses}
+          onSave={(a) => { saveAsset(a); if (!assetModal?.id) setTimeout(fetchAllPrices, 300); }}
+          onClose={() => setAssetModal(null)}/>
+      )}
+      {startupModal !== null && (
+        <StartupModal startup={startupModal?.id ? startupModal : null} onSave={saveSU} onClose={() => setStartupModal(null)}/>
+      )}
+      {peModal !== null && (
+        <PEModal pe={peModal?.id ? peModal : null} onSave={savePE} onClose={() => setPEModal(null)}/>
+      )}
+      {acModal && (
+        <AssetClassModal classes={assetClasses} onSave={setAC} onClose={() => setACModal(false)}/>
       )}
     </div>
   );

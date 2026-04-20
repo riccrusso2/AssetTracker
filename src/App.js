@@ -36,29 +36,6 @@ const MONTH_LABELS_IT = [
   "Lug","Ago","Set","Ott","Nov","Dic",
 ];
 
-const DEFAULT_ASSET_CLASSES = [
-  "ETF", "Azione", "Commodity", "Crypto", "Bond", "Altro",
-];
-
-const GOLD_ETF_DEFAULT = {
-  id: "gold-etf",
-  name: "Physical Gold USD (Acc)",
-  identifier: "",
-  quantity: 0,
-  costBasis: 0,
-  lastPrice: null,
-  lastUpdated: null,
-  targetWeight: 0,
-  assetClass: "Oro",
-  manual: false,
-};
-
-const PHYS_GOLD_DEFAULT = {
-  grams: 0,
-  pricePerGram18kt: null,
-  lastUpdated: null,
-};
-
 // ====================== UTILITIES ======================
 const r2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
 
@@ -552,54 +529,6 @@ const GoldEtfModal = ({ goldEtf, onSave, onClose }) => {
           <label className="field-label">Prezzo medio carico (€/quota)
             <input type="number" step="any" value={form.costBasis} onChange={(e) => set("costBasis", e.target.value)} className="field-input"/>
           </label>
-          <label className="field-label">Peso target (%)
-            <input type="number" step="any" value={form.targetWeight} onChange={(e) => set("targetWeight", e.target.value)} className="field-input"/>
-          </label>
-          <p className="hint-text" style={{ marginTop: 0 }}>
-            Il prezzo viene aggiornato automaticamente via JustETF usando l'ISIN inserito.
-          </p>
-        </div>
-        <div className="modal-footer">
-          <button className="btn btn-ghost" onClick={onClose}>Annulla</button>
-          <button className="btn btn-primary" onClick={handleSave}>
-            <CheckCircle size={15}/> Salva
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// ---- Modal Physical Gold ----
-// No cost basis — only grams and optional manual price override
-const PhysGoldModal = ({ physGold, onSave, onClose }) => {
-  const [form, setForm] = useState({ ...physGold });
-  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
-
-  const handleSave = () => {
-    if (!form.grams) return;
-    onSave({
-      grams:            parseFloat(form.grams) || 0,
-      pricePerGram18kt: form.pricePerGram18kt !== "" && form.pricePerGram18kt != null
-        ? parseFloat(form.pricePerGram18kt) || null
-        : null,
-      lastUpdated: physGold.lastUpdated ?? null,
-    });
-    onClose();
-  };
-
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <h3>🔶 Oro fisico 18kt</h3>
-          <button className="icon-btn" onClick={onClose}><X size={18}/></button>
-        </div>
-        <div className="modal-body">
-          <label className="field-label">Grammatura totale (g) *
-            <input type="number" step="any" min="0" value={form.grams}
-              onChange={(e) => set("grams", e.target.value)} className="field-input"/>
-          </label>
           <label className="field-label">
             Prezzo 18kt manuale (€/g)
             <input type="number" step="any" min="0"
@@ -607,11 +536,6 @@ const PhysGoldModal = ({ physGold, onSave, onClose }) => {
               onChange={(e) => set("pricePerGram18kt", e.target.value)}
               className="field-input" placeholder="Lascia vuoto per aggiornamento automatico"/>
           </label>
-          <p className="hint-text" style={{ marginTop: 0 }}>
-            Il prezzo 18kt viene aggiornato automaticamente tramite <strong>gold-api.com</strong>:<br/>
-            <code style={{ fontSize: 11 }}>prezzo spot (€/oz) ÷ 31,1035 × 0,75</code><br/>
-            Inserisci un valore manuale solo per sovrascrivere il fetch automatico.
-          </p>
         </div>
         <div className="modal-footer">
           <button className="btn btn-ghost" onClick={onClose}>Annulla</button>
@@ -762,93 +686,13 @@ export default function App() {
       .catch(() => {});
   }, []);
 
-  // ---- Gold spot price fetch ----
-  // Calls /api/gold-price which proxies gold-api.com XAU/EUR
-  // Backend returns: { spotEurPerTroyOz, spotEurPerGram, price18ktPerGram, updatedAt }
-  const fetchGoldSpotPrice = useCallback(async () => {
-    const res = await fetch("/api/gold-price");
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-
-    // Use pre-computed 18kt price from backend
-    let price18kt = null;
-    if (typeof data.price18ktPerGram === "number") {
-      price18kt = data.price18ktPerGram;
-    } else if (typeof data.spotEurPerGram === "number") {
-      price18kt = r2(data.spotEurPerGram * 0.75);
-    } else if (typeof data.spotEurPerTroyOz === "number") {
-      price18kt = r2((data.spotEurPerTroyOz / 31.1035) * 0.75);
-    } else {
-      throw new Error("Formato risposta /api/gold-price non valido");
-    }
-
-    setPhysGold((prev) => ({
-      ...prev,
-      pricePerGram18kt: r2(price18kt),
-      lastUpdated: data.updatedAt ?? new Date().toISOString(),
-    }));
-  }, []);
-
-  // ---- Refresh all gold prices (ETF + physical spot) ----
-  const refreshGoldPrices = useCallback(async () => {
-    setGoldLoading(true);
-    setGoldPriceErr(null);
-    try {
-      const tasks = [];
-
-      // Gold ETF via JustETF
-      const etf = goldEtfRef.current;
-      if (etf?.identifier && isISIN(etf.identifier)) {
-        tasks.push(
-          fetchOne(etf).then((res) => {
-            if (res.price != null) {
-              setGoldEtf((prev) => ({
-                ...prev,
-                lastPrice:   res.price,
-                lastUpdated: new Date().toISOString(),
-              }));
-            }
-          }).catch(() => {})
-        );
-      }
-
-      // Physical gold spot
-      tasks.push(
-        fetchGoldSpotPrice().catch((e) => {
-          setGoldPriceErr(`Prezzo spot non disponibile: ${e.message}`);
-        })
-      );
-
-      await Promise.all(tasks);
-    } finally {
-      setGoldLoading(false);
-    }
-  }, [fetchOne, fetchGoldSpotPrice]);
-
   // ---- Derived ----
   const totals    = useMemo(() => calcTotals(assets), [assets]);
   const weights   = useMemo(() => calcWeights(assets, totals.val), [assets, totals.val]);
   const classDist = useMemo(() => calcClassDist(assets), [assets]);
   const drift     = useMemo(() => calcDrift(assets, totals.val), [assets, totals.val]);
 
-  const goldEtfValue = useMemo(() =>
-    (goldEtf.lastPrice && goldEtf.quantity) ? r2(goldEtf.lastPrice * goldEtf.quantity) : 0,
-    [goldEtf]);
-  const goldEtfCost = useMemo(() =>
-    (goldEtf.costBasis && goldEtf.quantity) ? r2(goldEtf.costBasis * goldEtf.quantity) : 0,
-    [goldEtf]);
-  const goldEtfPerfE   = goldEtf.lastPrice && goldEtf.costBasis && goldEtf.quantity
-    ? r2((goldEtf.lastPrice - goldEtf.costBasis) * goldEtf.quantity) : 0;
-  const goldEtfPerfPct = goldEtf.lastPrice && goldEtf.costBasis
-    ? r2(((goldEtf.lastPrice - goldEtf.costBasis) / goldEtf.costBasis) * 100) : 0;
-
-  // Physical gold: value only (no cost basis, no performance)
-  const physGoldValue = useMemo(() =>
-    (physGold.pricePerGram18kt && physGold.grams) ? r2(physGold.pricePerGram18kt * physGold.grams) : 0,
-    [physGold]);
-
-  const goldTotal  = goldEtfValue + physGoldValue;
-
+  const peTotal    = useMemo(() => pe.reduce((a, f) => a + (f.lastPrice || 0), 0), [pe]);
   const suTotal    = useMemo(() => startups.reduce((a, s) => a + (s.invested || 0), 0), [startups]);
   const suFees     = useMemo(() => startups.reduce((a, s) => a + (s.fee || 0), 0), [startups]);
   const grandTotal = totals.val + totalCash + goldTotal + suTotal;
@@ -1485,150 +1329,41 @@ export default function App() {
           </button>
         </div>
 
-        {goldPriceErr && (
-          <div className="alert alert-amber" style={{ marginBottom: 16 }}>
-            <AlertTriangle size={14}/> {goldPriceErr}
-            <span style={{ fontSize: 12, marginLeft: 8, opacity: 0.8 }}>
-              — Assicurati che il backend esponga <code style={{ background: "rgba(0,0,0,0.2)", padding: "1px 5px", borderRadius: 4 }}>/api/gold-price</code>
-            </span>
-          </div>
-        )}
-
-        {/* ---- ETF Oro quotato ---- */}
-        <div style={{ marginBottom: 20 }}>
-          <div className="gold-sub-header">
-            <span className="gold-sub-label">ETF Oro quotato</span>
-            <button className="icon-btn" onClick={() => setGoldEtfModal(true)} title="Configura ETF oro">
-              <Edit2 size={14}/>
-            </button>
-          </div>
-
-          {!goldEtf.identifier ? (
-            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px",
-              background: "rgba(245,158,11,0.06)", border: "1px dashed rgba(245,158,11,0.3)",
-              borderRadius: "var(--radius-sm)", color: "var(--amber)" }}>
-              <AlertTriangle size={14}/>
-              <span style={{ fontSize: 13 }}>
-                Configura l'ETF oro inserendo ISIN e quantità.
-              </span>
-              <button className="btn btn-ghost" style={{ marginLeft: "auto", padding: "4px 12px", fontSize: 12 }}
-                onClick={() => setGoldEtfModal(true)}>
-                Configura
-              </button>
-            </div>
-          ) : (
-            <div className="table-wrap">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Nome</th><th>ISIN</th><th className="num">Quantità</th>
-                    <th className="num">P. Acquisto</th><th className="num">P. Attuale</th>
-                    <th className="num">Valore</th><th className="num">Perf €</th><th className="num">Perf %</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td className="asset-name">
-                      {loading[goldEtf.id] && <span className="loading-dot inline-dot"/>}
-                      {goldEtf.name}
-                    </td>
-                    <td className="mono muted">{goldEtf.identifier}</td>
-                    <td className="num mono">{goldEtf.quantity}</td>
-                    <td className="num mono">{fmt(goldEtf.costBasis)}</td>
-                    <td className="num mono">
-                      {goldEtf.lastPrice ? fmt(goldEtf.lastPrice) : <span className="muted">—</span>}
-                    </td>
-                    <td className="num mono"><strong>{goldEtfValue > 0 ? fmt(goldEtfValue) : "—"}</strong></td>
-                    <td className={`num mono ${goldEtfPerfE >= 0 ? "pos-text" : "neg-text"}`}>
-                      {goldEtf.lastPrice && goldEtf.costBasis
-                        ? `${goldEtfPerfE >= 0 ? "+" : ""}${fmt(goldEtfPerfE)}` : "—"}
-                    </td>
-                    <td className="num">
-                      {goldEtf.lastPrice && goldEtf.costBasis
-                        ? <Badge value={goldEtfPerfPct}/> : "—"}
+        <div className="table-wrap">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>ISIN</th>
+                <th className="num">Prezzo acquisto</th>
+                <th className="num">Prezzo attuale</th>
+                <th className="num">Perf</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {pe.map((f) => {
+                const perf = f.costBasis ? r2(((f.lastPrice - f.costBasis) / f.costBasis) * 100) : 0;
+                return (
+                  <tr key={f.id}>
+                    <td>{f.name}</td>
+                    <td className="mono muted">{f.identifier}</td>
+                    <td className="num mono">{fmt(f.costBasis)}</td>
+                    <td className="num mono">{fmt(f.lastPrice)}</td>
+                    <td className="num"><Badge value={perf}/></td>
+                    <td>
+                      <div className="row-actions">
+                        <button className="icon-btn" onClick={() => setPEModal(f)}><Edit2 size={14}/></button>
+                        <button className="icon-btn danger" onClick={() => {
+                          if (window.confirm(`Rimuovere ${f.name}?`)) deletePE(f.id);
+                        }}><Trash2 size={14}/></button>
+                      </div>
                     </td>
                   </tr>
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-
-        {/* ---- Oro fisico 18kt ---- */}
-        <div style={{ borderTop: "1px solid var(--border)", paddingTop: 16 }}>
-          <div className="gold-sub-header">
-            <span className="gold-sub-label">Oro fisico 18kt</span>
-            <button className="icon-btn" onClick={() => setPhysGoldModal(true)} title="Modifica oro fisico">
-              <Edit2 size={14}/>
-            </button>
-          </div>
-
-          {physGold.grams === 0 ? (
-            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px",
-              background: "var(--bg-card2)", border: "1px dashed var(--border)",
-              borderRadius: "var(--radius-sm)", color: "var(--text-muted)" }}>
-              <span style={{ fontSize: 13 }}>
-                Nessun oro fisico registrato. Clicca la matita per inserire la grammatura.
-              </span>
-              <button className="btn btn-ghost" style={{ marginLeft: "auto", padding: "4px 12px", fontSize: 12 }}
-                onClick={() => setPhysGoldModal(true)}>
-                Aggiungi
-              </button>
-            </div>
-          ) : (
-            <>
-              <div className="table-wrap">
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Tipo</th>
-                      <th className="num">Grammatura</th>
-                      <th className="num">Prezzo 18kt /g</th>
-                      <th className="num">Valore totale</th>
-                      <th className="num" style={{ fontSize: 10, whiteSpace: "nowrap" }}>Ult. agg.</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <td>
-                        <span className="class-tag" style={{ background: "rgba(245,158,11,0.1)", borderColor: "rgba(245,158,11,0.3)", color: "var(--amber)" }}>
-                          18kt
-                        </span>
-                        {" "}Oro fisico
-                      </td>
-                      <td className="num mono"><strong>{physGold.grams} g</strong></td>
-                      <td className="num mono">
-                        {physGold.pricePerGram18kt
-                          ? <span style={{ color: "var(--amber)" }}>{fmt(physGold.pricePerGram18kt)}</span>
-                          : <span className="muted">—</span>}
-                      </td>
-                      <td className="num mono">
-                        <strong>{physGoldValue > 0 ? fmt(physGoldValue) : "—"}</strong>
-                      </td>
-                      <td className="num muted" style={{ fontSize: 11 }}>
-                        {physGold.lastUpdated
-                          ? new Date(physGold.lastUpdated).toLocaleDateString("it-IT")
-                          : "—"}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-              {physGold.grams > 0 && !physGold.pricePerGram18kt && (
-                <p className="hint-text">
-                  ⚠ Prezzo 18kt non disponibile. Premi <strong>Aggiorna prezzi oro</strong> oppure inserisci il prezzo manualmente dalla matita.
-                </p>
-              )}
-              {physGold.grams > 0 && physGold.pricePerGram18kt && (
-                <p className="hint-text" style={{ color: "var(--text-muted)" }}>
-                  Calcolato come <strong>spot XAU/EUR (oz) ÷ 31,1035 × 0,75</strong> via gold-api.com.
-                  {physGold.lastUpdated && (
-                    <> Aggiornato il {new Date(physGold.lastUpdated).toLocaleString("it-IT")}.</>
-                  )}
-                </p>
-              )}
-            </>
-          )}
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

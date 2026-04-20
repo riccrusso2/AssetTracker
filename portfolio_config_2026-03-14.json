@@ -1,0 +1,226 @@
+{
+  "version": 1,
+  "exportedAt": "2026-03-18T17:17:25.883Z",
+  "totalCash": 9450,
+  "assets": [
+    {
+      "id": "ftseallworld",
+      "name": "FTSE All-World USD",
+      "identifier": "IE00BK5BQT80",
+      "quantity": 94.164474,
+      "costBasis": 135.54,
+      "targetWeight": 57,
+      "lastPrice": 146.86,
+      "lastUpdated": "2026-03-18T17:15:24.266Z",
+      "assetClass": "ETF",
+      "currency": "EUR"
+    },
+    {
+      "id": "swda",
+      "name": "iShares Core MSCI World (Acc)",
+      "identifier": "IE00B4L5Y983",
+      "quantity": 3,
+      "costBasis": 113.786191,
+      "targetWeight": 3,
+      "lastPrice": 111.74,
+      "lastUpdated": "2026-03-18T17:15:24.205Z",
+      "assetClass": "ETF",
+      "currency": "EUR"
+    },
+    {
+      "id": "msciemimi",
+      "name": "iShares MSCI EM IMI",
+      "identifier": "IE00BKM4GZ66",
+      "quantity": 27,
+      "costBasis": 42.2041,
+      "targetWeight": 5,
+      "lastPrice": 41.35,
+      "lastUpdated": "2026-03-18T17:15:24.386Z",
+      "assetClass": "ETF",
+      "currency": "EUR"
+    },
+    {
+      "id": "worldquality",
+      "name": "iShares MSCI World Quality Factor (Acc)",
+      "identifier": "IE00BP3QZ601",
+      "quantity": 23,
+      "costBasis": 68.020433,
+      "targetWeight": 7,
+      "lastPrice": 68.96,
+      "lastUpdated": "2026-03-18T17:15:24.224Z",
+      "assetClass": "ETF",
+      "currency": "EUR",
+      "chartLabel": "MSCI Quality"
+    },
+    {
+      "id": "worldmomentum",
+      "name": "iShares MSCI World Momentum Factor (Acc)",
+      "identifier": "IE00BP3QZ825",
+      "quantity": 19,
+      "costBasis": 83.685259,
+      "targetWeight": 7,
+      "lastPrice": 83.9,
+      "lastUpdated": "2026-03-18T17:15:24.419Z",
+      "assetClass": "ETF",
+      "currency": "EUR",
+      "chartLabel": "MSCI Momentum"
+    },
+    {
+      "id": "worldvalue",
+      "name": "iShares MSCI World Value Factor (Acc)",
+      "identifier": "IE00BP3QZB59",
+      "quantity": 28,
+      "costBasis": 50.865352,
+      "targetWeight": 7,
+      "lastPrice": 55.36,
+      "lastUpdated": "2026-03-18T17:15:24.419Z",
+      "assetClass": "ETF",
+      "currency": "EUR",
+      "chartLabel": "MSCI Value"
+    },
+    {
+      "id": "gold",
+      "name": "Physical Gold USD (Acc)",
+      "identifier": "IE00B4ND3602",
+      "quantity": 28.114722,
+      "costBasis": 59.19,
+      "targetWeight": 10,
+      "lastPrice": 82.09,
+      "lastUpdated": "2026-03-18T17:15:24.223Z",
+      "assetClass": "Commodity",
+      "currency": "EUR"
+    },
+    {
+      "id": "bitcoin",
+      "name": "Bitcoin ETP",
+      "identifier": "XS2940466316",
+      "quantity": 124,
+      "costBasis": 7.31836,
+      "targetWeight": 4,
+      "lastPrice": 6.18,
+      "lastUpdated": "2026-03-18T17:15:24.419Z",
+      "assetClass": "Crypto",
+      "currency": "EUR"
+    },
+    {
+      "id": "quantum",
+      "name": "VanEck Quantum Computing UCITS ETF",
+      "identifier": "IE0007Y8Y157",
+      "quantity": 16.127685,
+      "costBasis": 21.01,
+      "targetWeight": 0,
+      "lastPrice": 20.55,
+      "lastUpdated": "2026-03-18T17:15:24.419Z",
+      "assetClass": "ETF",
+      "currency": "EUR"
+    }
+  ],
+  "startups": [
+    {
+      "id": "xkvehmcp",
+      "name": "Rhyde 2.0",
+      "invested": 248,
+      "fee": 19.84
+    },
+    {
+      "id": "zmnq0zus",
+      "name": "Hymalaia",
+      "invested": 300,
+      "fee": 24
+    },
+    {
+      "id": "g7sxn5jn",
+      "name": "Favikon",
+      "invested": 300,
+      "fee": 24
+    },
+    {
+      "id": "0oad7rpi",
+      "name": "Orbital Paradigm",
+      "invested": 300,
+      "fee": 24
+    },
+    {
+      "id": "wqu5pjxy",
+      "name": "Yasu",
+      "invested": 300,
+      "fee": 24
+    },
+    {
+      "id": "9pqjzwe9",
+      "name": "Reental",
+      "invested": 300,
+      "fee": 24
+    },
+    {
+      "id": "vg02d1kb",
+      "name": "Fintower",
+      "invested": 300,
+      "fee": 24
+    },
+    {
+      "id": "0wdakwh3",
+      "name": "Epic Games",
+      "invested": 300,
+      "fee": 24
+    },
+    {
+      "id": "yff2i5jd",
+      "name": "Mega",
+      "invested": 300,
+      "fee": 24
+    },
+    {
+      "id": "l9dw8q9a",
+      "name": "Aalo Atomics",
+      "invested": 300,
+      "fee": 24
+    },
+    {
+      "id": "3bvtqh4h",
+      "name": "Topo",
+      "invested": 300,
+      "fee": 24
+    },
+    {
+      "id": "a6fw4arz",
+      "name": "Perplexity",
+      "invested": 300,
+      "fee": 24
+    },
+    {
+      "id": "0c5oxmin",
+      "name": "Boardy",
+      "invested": 300,
+      "fee": 24
+    },
+    {
+      "id": "e5s3hv4a",
+      "name": "Crusoe",
+      "invested": 300,
+      "fee": 24
+    }
+  ],
+  "pe": [
+    {
+      "id": "eqt-nexus",
+      "name": "EQT Nexus ELTIF",
+      "identifier": "LU3176111881",
+      "costBasis": 500,
+      "lastPrice": 523,
+      "targetWeight": 0,
+      "assetClass": "Private Equity",
+      "manual": true
+    },
+    {
+      "id": "apollo-global",
+      "name": "Apollo Global Private Markets ELTIF",
+      "identifier": "LU3170240538",
+      "costBasis": 500,
+      "lastPrice": 508,
+      "targetWeight": 0,
+      "assetClass": "Private Equity",
+      "manual": true
+    }
+  ]
+}

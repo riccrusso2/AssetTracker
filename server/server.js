@@ -42,6 +42,7 @@ app.get("/api/quote", async (req, res) => {
   }
 });
 
+<<<<<<< HEAD
 // ── Gold price endpoint ───────────────────────────────────────
 // Calls gold-api.com for XAU/EUR spot price (per troy oz)
 // Returns: spotEurPerTroyOz, spotEurPerGram, price18ktPerGram
@@ -71,6 +72,8 @@ app.get("/api/gold-price", async (req, res) => {
   }
 });
 
+=======
+>>>>>>> af8bb6f9a14dcebc9d3dffd9b7d0517624ad52d1
 // ── GET /api/snapshots ────────────────────────────────────────
 app.get("/api/snapshots", (req, res) => {
   try { res.json(readSnapshots()); }
@@ -133,4 +136,8 @@ app.get("*", (req, res) => {
 });
 
 const PORT = process.env.PORT || 10000;
+<<<<<<< HEAD
 app.listen(PORT, () => console.log(`✅ Server running at http://localhost:${PORT}`));
+=======
+app.listen(PORT, () => console.log(`✅ Server running at http://localhost:${PORT}`));
+>>>>>>> af8bb6f9a14dcebc9d3dffd9b7d0517624ad52d1

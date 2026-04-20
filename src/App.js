@@ -486,13 +486,12 @@ const AssetModal = ({ asset, assetClasses, onSave, onClose }) => {
 
 // ---- Modal Startup ----
 const StartupModal = ({ startup, onSave, onClose }) => {
-  const [form, setForm] = useState(startup ? { ...startup, abbonamento: startup.abbonamento || "468" } : { name: "", invested: "", fee: "", abbonamento: "468" });
+  const [form, setForm] = useState(startup || { name: "", invested: "", fee: "" });
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const handleSave = () => {
     if (!form.name || !form.invested) return;
     onSave({ id: form.id || uid(), name: form.name,
-      invested: parseFloat(form.invested) || 0, fee: parseFloat(form.fee) || 0,
-      abbonamento: parseFloat(form.abbonamento) || 0 });
+      invested: parseFloat(form.invested) || 0, fee: parseFloat(form.fee) || 0 });
     onClose();
   };
   return (
@@ -511,9 +510,6 @@ const StartupModal = ({ startup, onSave, onClose }) => {
           </label>
           <label className="field-label">Commissioni (€)
             <input type="number" step="any" value={form.fee} onChange={(e) => set("fee", e.target.value)} className="field-input"/>
-          </label>
-          <label className="field-label">Abbonamento (€)
-            <input type="number" step="any" value={form.abbonamento} onChange={(e) => set("abbonamento", e.target.value)} className="field-input"/>
           </label>
         </div>
         <div className="modal-footer">
@@ -868,7 +864,7 @@ export default function App() {
 
   const suTotal    = useMemo(() => startups.reduce((a, s) => a + (s.invested || 0), 0), [startups]);
   const suFees     = useMemo(() => startups.reduce((a, s) => a + (s.fee || 0), 0), [startups]);
-  const suAbbonamenti = useMemo(() => startups.reduce((a, s) => a + (s.abbonamento || 0), 0), [startups]);
+  const suAbbonamenti = STARTUP_ABBONAMENTO;
   const grandTotal = totals.val + totalCash + goldTotal + suTotal;
 
   const fullClassDist = useMemo(() => {
@@ -1145,7 +1141,7 @@ export default function App() {
               trend={goldEtfPerfPct}/>
             <KpiCard label="Startup"
               value={fmt(suTotal, true)}
-              sub={(suFees > 0 || suAbbonamenti > 0) ? `Commissioni: ${fmt(suFees)}, Abbonamento: ${fmt(suAbbonamenti)}` : ""}
+              sub={suFees > 0 ? `Commissioni: ${fmt(suFees)}, Abbonamento: ${fmt(suAbbonamenti)}` : `Abbonamento: ${fmt(suAbbonamenti)}`}
               color="blue"/>
           </div>
 
@@ -1635,14 +1631,13 @@ export default function App() {
         ) : (
           <div className="table-wrap">
             <table className="data-table">
-              <thead><tr><th>Nome</th><th className="num">Importo investito</th><th className="num">Commissioni</th><th className="num">Abbonamento</th><th></th></tr></thead>
+              <thead><tr><th>Nome</th><th className="num">Importo investito</th><th className="num">Commissioni</th><th></th></tr></thead>
               <tbody>
                 {startups.map((s) => (
                   <tr key={s.id}>
                     <td>{s.name}</td>
                     <td className="num mono"><strong>{fmt(s.invested)}</strong></td>
                     <td className="num mono">{fmt(s.fee)}</td>
-                    <td className="num mono">{fmt(s.abbonamento)}</td>
                     <td>
                       <div className="row-actions">
                         <button className="icon-btn" onClick={() => setStartupModal(s)}><Edit2 size={14}/></button>

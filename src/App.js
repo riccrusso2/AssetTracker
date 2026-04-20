@@ -827,40 +827,38 @@ export default function App() {
   }));
 }, []);
 
-  const refreshGoldPrices = useCallback(async () => {
-    setGoldLoading(true);
-    setGoldPriceErr(null);
-    try {
-      const tasks = [];
+const refreshGoldPrices = useCallback(async () => {
+  setGoldLoading(true);
+  setGoldPriceErr(null);
+  try {
+    const tasks = [];
 
-      // Gold ETF via JustETF
-      const etf = goldEtfRef.current;
-      if (etf?.identifier && isISIN(etf.identifier)) {
-        tasks.push(
-          fetchOne(etf).then((res) => {
-            if (res.price != null) {
-              setGoldEtf((prev) => ({
-                ...prev,
-                lastPrice:   res.price,
-                lastUpdated: new Date().toISOString(),
-              }));
-            }
-          }).catch(() => {})
-        );
-      }
-
-      // Physical gold spot
+    const etf = goldEtfRef.current;
+    if (etf?.identifier && isISIN(etf.identifier)) {
       tasks.push(
-        fetchGoldSpotPrice().catch((e) => {
-          setGoldPriceErr(`Prezzo spot non disponibile: ${e.message}`);
-        })
+        fetchOne(etf).then((res) => {
+          if (res.price != null) {
+            setGoldEtf((prev) => ({
+              ...prev,
+              lastPrice: res.price,
+              lastUpdated: new Date().toISOString(),
+            }));
+          }
+        }).catch(() => {})
       );
-
-      await Promise.all(tasks);
-    } finally {
-      setGoldLoading(false);
     }
-  }, [fetchOne, fetchGoldSpotPrice]);
+
+    tasks.push(
+      fetchGoldSpotPrice().catch((e) => {
+        setGoldPriceErr(`Prezzo spot non disponibile: ${e.message}`);
+      })
+    );
+
+    await Promise.all(tasks);
+  } finally {
+    setGoldLoading(false);
+  }
+}, [fetchOne, fetchGoldSpotPrice]);
 
   // ---- Derived ----
 const totals = useMemo(() => calcTotals(assets, goldEtf), [assets, goldEtf]);

@@ -19,15 +19,16 @@ import "./styles.css";
 
 // ====================== CONSTANTS ======================
 const STORAGE_KEYS = {
-  ASSETS:         "pf.assets.v6",
-  STARTUP:        "pf.startup.v3",
-  PRIVATE_EQUITY: "pf.pe.v3",
-  DARK_MODE:      "pf.dark.v1",
-  CASH:           "pf.cash.v2",
-  ASSET_CLASSES:  "pf.assetclasses.v1",
+  ASSETS:        "pf.assets.v6",
+  STARTUP:       "pf.startup.v3",
+  GOLD_ETF:      "pf.goldetf.v1",
+  PHYS_GOLD:     "pf.physgold.v1",
+  DARK_MODE:     "pf.dark.v1",
+  CASH:          "pf.cash.v2",
+  ASSET_CLASSES: "pf.assetclasses.v1",
 };
 
-const CONFIG_VERSION  = 2;
+const CONFIG_VERSION  = 3;
 const AUTO_REFRESH_MS = 900_000; // 15 min
 
 const MONTH_LABELS_IT = [
@@ -35,10 +36,28 @@ const MONTH_LABELS_IT = [
   "Lug","Ago","Set","Ott","Nov","Dic",
 ];
 
-// Default asset classes (user can modify/delete/add)
 const DEFAULT_ASSET_CLASSES = [
   "ETF", "Azione", "Commodity", "Crypto", "Bond", "Altro",
 ];
+
+const GOLD_ETF_DEFAULT = {
+  id: "gold-etf",
+  name: "Physical Gold USD (Acc)",
+  identifier: "",
+  quantity: 0,
+  costBasis: 0,
+  lastPrice: null,
+  lastUpdated: null,
+  targetWeight: 0,
+  assetClass: "Oro",
+  manual: false,
+};
+
+const PHYS_GOLD_DEFAULT = {
+  grams: 0,
+  pricePerGram18kt: null,
+  lastUpdated: null,
+};
 
 // ====================== UTILITIES ======================
 const r2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
@@ -313,7 +332,6 @@ const RiskCard = ({ label, value, fmt: fmtFn, tooltip, quality }) => {
   );
 };
 
-// ---- Empty State Component ----
 const EmptyState = ({ icon: Icon, title, description, action }) => (
   <div className="empty-state">
     <div className="empty-icon"><Icon size={28} /></div>
@@ -498,45 +516,106 @@ const StartupModal = ({ startup, onSave, onClose }) => {
   );
 };
 
-// ---- Modal Private Equity ----
-const PEModal = ({ pe, onSave, onClose }) => {
-  const [form, setForm] = useState(pe || { name: "", identifier: "", costBasis: "", lastPrice: "" });
+// ---- Modal Gold ETF ----
+const GoldEtfModal = ({ goldEtf, onSave, onClose }) => {
+  const [form, setForm] = useState({ ...goldEtf });
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+
   const handleSave = () => {
-    if (!form.name || !form.costBasis) return;
     onSave({
-      id: form.id || uid(), name: form.name, identifier: form.identifier || "",
-      costBasis: parseFloat(form.costBasis) || 0,
-      lastPrice: parseFloat(form.lastPrice) || parseFloat(form.costBasis) || 0,
-      targetWeight: 0, assetClass: "Private Equity", manual: true,
+      ...form,
+      quantity:     parseFloat(form.quantity)     || 0,
+      costBasis:    parseFloat(form.costBasis)    || 0,
+      targetWeight: parseFloat(form.targetWeight) || 0,
     });
     onClose();
   };
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h3>{pe?.id ? "Modifica ELTIF / PE" : "Aggiungi ELTIF / Private Equity"}</h3>
+          <h3>⚙️ Configura ETF Oro quotato</h3>
           <button className="icon-btn" onClick={onClose}><X size={18}/></button>
         </div>
         <div className="modal-body">
-          <label className="field-label">Nome *
+          <label className="field-label">Nome
             <input type="text" value={form.name} onChange={(e) => set("name", e.target.value)} className="field-input"/>
           </label>
-          <label className="field-label">ISIN
-            <input type="text" value={form.identifier} onChange={(e) => set("identifier", e.target.value)} className="field-input"/>
+          <label className="field-label">ISIN *
+            <input type="text" value={form.identifier} onChange={(e) => set("identifier", e.target.value.toUpperCase())}
+              className="field-input" placeholder="es. IE00B4ND3602"/>
           </label>
-          <label className="field-label">Prezzo acquisto (€) *
+          <label className="field-label">Quantità (quote)
+            <input type="number" step="any" value={form.quantity} onChange={(e) => set("quantity", e.target.value)} className="field-input"/>
+          </label>
+          <label className="field-label">Prezzo medio carico (€/quota)
             <input type="number" step="any" value={form.costBasis} onChange={(e) => set("costBasis", e.target.value)} className="field-input"/>
           </label>
-          <label className="field-label">Prezzo attuale (€)
-            <input type="number" step="any" value={form.lastPrice} onChange={(e) => set("lastPrice", e.target.value)} className="field-input"
-              placeholder="Se vuoto, usa prezzo acquisto"/>
+          <label className="field-label">Peso target (%)
+            <input type="number" step="any" value={form.targetWeight} onChange={(e) => set("targetWeight", e.target.value)} className="field-input"/>
           </label>
+          <p className="hint-text" style={{ marginTop: 0 }}>
+            Il prezzo viene aggiornato automaticamente via JustETF usando l'ISIN inserito.
+          </p>
         </div>
         <div className="modal-footer">
           <button className="btn btn-ghost" onClick={onClose}>Annulla</button>
-          <button className="btn btn-primary" onClick={handleSave} disabled={!form.name || !form.costBasis}>
+          <button className="btn btn-primary" onClick={handleSave}>
+            <CheckCircle size={15}/> Salva
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ---- Modal Physical Gold ----
+// No cost basis — only grams and optional manual price override
+const PhysGoldModal = ({ physGold, onSave, onClose }) => {
+  const [form, setForm] = useState({ ...physGold });
+  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+
+  const handleSave = () => {
+    if (!form.grams) return;
+    onSave({
+      grams:            parseFloat(form.grams) || 0,
+      pricePerGram18kt: form.pricePerGram18kt !== "" && form.pricePerGram18kt != null
+        ? parseFloat(form.pricePerGram18kt) || null
+        : null,
+      lastUpdated: physGold.lastUpdated ?? null,
+    });
+    onClose();
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3>🔶 Oro fisico 18kt</h3>
+          <button className="icon-btn" onClick={onClose}><X size={18}/></button>
+        </div>
+        <div className="modal-body">
+          <label className="field-label">Grammatura totale (g) *
+            <input type="number" step="any" min="0" value={form.grams}
+              onChange={(e) => set("grams", e.target.value)} className="field-input"/>
+          </label>
+          <label className="field-label">
+            Prezzo 18kt manuale (€/g)
+            <input type="number" step="any" min="0"
+              value={form.pricePerGram18kt ?? ""}
+              onChange={(e) => set("pricePerGram18kt", e.target.value)}
+              className="field-input" placeholder="Lascia vuoto per aggiornamento automatico"/>
+          </label>
+          <p className="hint-text" style={{ marginTop: 0 }}>
+            Il prezzo 18kt viene aggiornato automaticamente tramite <strong>gold-api.com</strong>:<br/>
+            <code style={{ fontSize: 11 }}>prezzo spot (€/oz) ÷ 31,1035 × 0,75</code><br/>
+            Inserisci un valore manuale solo per sovrascrivere il fetch automatico.
+          </p>
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-ghost" onClick={onClose}>Annulla</button>
+          <button className="btn btn-primary" onClick={handleSave} disabled={!form.grams}>
             <CheckCircle size={15}/> Salva
           </button>
         </div>
@@ -633,10 +712,11 @@ export default function App() {
   // ---- State ----
   const [dark,         setDark]    = useLS(STORAGE_KEYS.DARK_MODE, true);
   const [assets,       setAssets]  = useLS(STORAGE_KEYS.ASSETS, []);
-  const [pe,           setPE]      = useLS(STORAGE_KEYS.PRIVATE_EQUITY, []);
   const [startups,     setSU]      = useLS(STORAGE_KEYS.STARTUP, []);
   const [totalCash,    setCash]    = useLS(STORAGE_KEYS.CASH, 0);
   const [assetClasses, setAC]      = useLS(STORAGE_KEYS.ASSET_CLASSES, DEFAULT_ASSET_CLASSES);
+  const [goldEtf,      setGoldEtf] = useLS(STORAGE_KEYS.GOLD_ETF, GOLD_ETF_DEFAULT);
+  const [physGold,     setPhysGold]= useLS(STORAGE_KEYS.PHYS_GOLD, PHYS_GOLD_DEFAULT);
 
   const [snapshots,      setSnapshots]    = useState([]);
   const [snapshotSaving, setSnapSaving]   = useState(false);
@@ -646,22 +726,28 @@ export default function App() {
   const [tab,          setTab]          = useState("overview");
   const [search,       setSearch]       = useState("");
 
-  const [assetModal,   setAssetModal]   = useState(null);
-  const [startupModal, setStartupModal] = useState(null);
-  const [peModal,      setPEModal]      = useState(null);
-  const [acModal,      setACModal]      = useState(false);
-  const [editCash,     setEditCash]     = useState(false);
-  const [cashInput,    setCashInput]    = useState("");
-  const [configMsg,    setConfigMsg]    = useState(null);
+  const [assetModal,    setAssetModal]   = useState(null);
+  const [startupModal,  setStartupModal] = useState(null);
+  const [goldEtfModal,  setGoldEtfModal] = useState(false);
+  const [physGoldModal, setPhysGoldModal]= useState(false);
+  const [acModal,       setACModal]      = useState(false);
+  const [editCash,      setEditCash]     = useState(false);
+  const [cashInput,     setCashInput]    = useState("");
+  const [configMsg,     setConfigMsg]    = useState(null);
 
   const [projYears,   setProjY] = useState(10);
   const [projReturn,  setProjR] = useState(7);
   const [projMonthly, setProjM] = useState(500);
   const [monthBudget, setBudget] = useState(500);
 
+  const [goldLoading,  setGoldLoading]  = useState(false);
+  const [goldPriceErr, setGoldPriceErr] = useState(null);
+
   const { fetchOne, loading, error } = usePriceFetcher();
-  const assetsRef = useRef(assets);
-  useEffect(() => { assetsRef.current = assets; }, [assets]);
+  const assetsRef  = useRef(assets);
+  const goldEtfRef = useRef(goldEtf);
+  useEffect(() => { assetsRef.current  = assets;  }, [assets]);
+  useEffect(() => { goldEtfRef.current = goldEtf; }, [goldEtf]);
 
   // Dark mode
   useEffect(() => {
@@ -676,24 +762,104 @@ export default function App() {
       .catch(() => {});
   }, []);
 
+  // ---- Gold spot price fetch ----
+  // Calls /api/gold-price which proxies gold-api.com XAU/EUR
+  // Backend returns: { spotEurPerTroyOz, spotEurPerGram, price18ktPerGram, updatedAt }
+  const fetchGoldSpotPrice = useCallback(async () => {
+    const res = await fetch("/api/gold-price");
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    // Use pre-computed 18kt price from backend
+    let price18kt = null;
+    if (typeof data.price18ktPerGram === "number") {
+      price18kt = data.price18ktPerGram;
+    } else if (typeof data.spotEurPerGram === "number") {
+      price18kt = r2(data.spotEurPerGram * 0.75);
+    } else if (typeof data.spotEurPerTroyOz === "number") {
+      price18kt = r2((data.spotEurPerTroyOz / 31.1035) * 0.75);
+    } else {
+      throw new Error("Formato risposta /api/gold-price non valido");
+    }
+
+    setPhysGold((prev) => ({
+      ...prev,
+      pricePerGram18kt: r2(price18kt),
+      lastUpdated: data.updatedAt ?? new Date().toISOString(),
+    }));
+  }, []);
+
+  // ---- Refresh all gold prices (ETF + physical spot) ----
+  const refreshGoldPrices = useCallback(async () => {
+    setGoldLoading(true);
+    setGoldPriceErr(null);
+    try {
+      const tasks = [];
+
+      // Gold ETF via JustETF
+      const etf = goldEtfRef.current;
+      if (etf?.identifier && isISIN(etf.identifier)) {
+        tasks.push(
+          fetchOne(etf).then((res) => {
+            if (res.price != null) {
+              setGoldEtf((prev) => ({
+                ...prev,
+                lastPrice:   res.price,
+                lastUpdated: new Date().toISOString(),
+              }));
+            }
+          }).catch(() => {})
+        );
+      }
+
+      // Physical gold spot
+      tasks.push(
+        fetchGoldSpotPrice().catch((e) => {
+          setGoldPriceErr(`Prezzo spot non disponibile: ${e.message}`);
+        })
+      );
+
+      await Promise.all(tasks);
+    } finally {
+      setGoldLoading(false);
+    }
+  }, [fetchOne, fetchGoldSpotPrice]);
+
   // ---- Derived ----
   const totals    = useMemo(() => calcTotals(assets), [assets]);
   const weights   = useMemo(() => calcWeights(assets, totals.val), [assets, totals.val]);
   const classDist = useMemo(() => calcClassDist(assets), [assets]);
   const drift     = useMemo(() => calcDrift(assets, totals.val), [assets, totals.val]);
 
-  const peTotal    = useMemo(() => pe.reduce((a, f) => a + (f.lastPrice || 0), 0), [pe]);
+  const goldEtfValue = useMemo(() =>
+    (goldEtf.lastPrice && goldEtf.quantity) ? r2(goldEtf.lastPrice * goldEtf.quantity) : 0,
+    [goldEtf]);
+  const goldEtfCost = useMemo(() =>
+    (goldEtf.costBasis && goldEtf.quantity) ? r2(goldEtf.costBasis * goldEtf.quantity) : 0,
+    [goldEtf]);
+  const goldEtfPerfE   = goldEtf.lastPrice && goldEtf.costBasis && goldEtf.quantity
+    ? r2((goldEtf.lastPrice - goldEtf.costBasis) * goldEtf.quantity) : 0;
+  const goldEtfPerfPct = goldEtf.lastPrice && goldEtf.costBasis
+    ? r2(((goldEtf.lastPrice - goldEtf.costBasis) / goldEtf.costBasis) * 100) : 0;
+
+  // Physical gold: value only (no cost basis, no performance)
+  const physGoldValue = useMemo(() =>
+    (physGold.pricePerGram18kt && physGold.grams) ? r2(physGold.pricePerGram18kt * physGold.grams) : 0,
+    [physGold]);
+
+  const goldTotal  = goldEtfValue + physGoldValue;
+
   const suTotal    = useMemo(() => startups.reduce((a, s) => a + (s.invested || 0), 0), [startups]);
   const suFees     = useMemo(() => startups.reduce((a, s) => a + (s.fee || 0), 0), [startups]);
-  const grandTotal = totals.val + totalCash + peTotal + suTotal;
+  const grandTotal = totals.val + totalCash + goldTotal + suTotal;
 
   const fullClassDist = useMemo(() => {
     const base = [...classDist];
-    if (suTotal > 0)   base.push({ name: "Startup",        value: r2(suTotal) });
-    if (peTotal > 0)   base.push({ name: "Private Equity", value: r2(peTotal) });
-    if (totalCash > 0) base.push({ name: "Liquidità",      value: r2(totalCash) });
+    if (suTotal    > 0) base.push({ name: "Startup",    value: r2(suTotal) });
+    if (goldTotal  > 0) base.push({ name: "Oro",        value: r2(goldTotal) });
+    if (totalCash  > 0) base.push({ name: "Liquidità",  value: r2(totalCash) });
     return base;
-  }, [classDist, suTotal, peTotal, totalCash]);
+  }, [classDist, suTotal, goldTotal, totalCash]);
 
   const rebalance = useMemo(() => calcRebalancing(assets, totals.val, monthBudget), [assets, totals.val, monthBudget]);
 
@@ -748,22 +914,46 @@ export default function App() {
 
   // ---- Actions ----
   const fetchAllPrices = useCallback(async () => {
-    if (!assetsRef.current?.length) return;
-    const updated = await Promise.all(
-      assetsRef.current.map(async (a) => {
-        const res = await fetchOne(a);
-        return res.price != null
-          ? { ...a, lastPrice: res.price, lastUpdated: new Date().toISOString() }
-          : a;
-      })
-    );
-    setAssets(updated);
+    const tasks = [];
+
+    // Regular assets
+    if (assetsRef.current?.length) {
+      tasks.push(
+        Promise.all(
+          assetsRef.current.map(async (a) => {
+            const res = await fetchOne(a);
+            return res.price != null
+              ? { ...a, lastPrice: res.price, lastUpdated: new Date().toISOString() }
+              : a;
+          })
+        ).then((updated) => setAssets(updated))
+      );
+    }
+
+    // Gold ETF (parallel)
+    const etf = goldEtfRef.current;
+    if (etf?.identifier && isISIN(etf.identifier)) {
+      tasks.push(
+        fetchOne(etf).then((res) => {
+          if (res.price != null) {
+            setGoldEtf((prev) => ({ ...prev, lastPrice: res.price, lastUpdated: new Date().toISOString() }));
+          }
+        }).catch(() => {})
+      );
+    }
+
+    await Promise.all(tasks);
   }, [fetchOne, setAssets]);
 
   const intervalRef = useRef(null);
   useEffect(() => {
-    if (assets.length > 0) fetchAllPrices();
-    intervalRef.current = setInterval(fetchAllPrices, AUTO_REFRESH_MS);
+    if (assets.length > 0 || goldEtf.identifier) fetchAllPrices();
+    // Try to refresh physical gold spot on load too
+    fetchGoldSpotPrice().catch(() => {});
+    intervalRef.current = setInterval(() => {
+      fetchAllPrices();
+      fetchGoldSpotPrice().catch(() => {});
+    }, AUTO_REFRESH_MS);
     return () => clearInterval(intervalRef.current);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -837,8 +1027,10 @@ export default function App() {
 
   // ---- Config export/import ----
   const exportConfig = useCallback(() => {
-    const config = { version: CONFIG_VERSION, exportedAt: new Date().toISOString(),
-      totalCash, assets, startups, pe, assetClasses };
+    const config = {
+      version: CONFIG_VERSION, exportedAt: new Date().toISOString(),
+      totalCash, assets, startups, assetClasses, goldEtf, physGold,
+    };
     const blob = new Blob([JSON.stringify(config, null, 2)], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
@@ -846,7 +1038,7 @@ export default function App() {
     a.click();
     URL.revokeObjectURL(a.href);
     showCfgMsg("ok", "✓ Configurazione esportata");
-  }, [assets, startups, pe, totalCash, assetClasses]);
+  }, [assets, startups, totalCash, assetClasses, goldEtf, physGold]);
 
   const configImportRef = useRef(null);
   const importConfig = useCallback(async (file) => {
@@ -857,9 +1049,10 @@ export default function App() {
         throw new Error("File non valido.");
       if (Array.isArray(config.assets))       setAssets(config.assets);
       if (Array.isArray(config.startups))     setSU(config.startups);
-      if (Array.isArray(config.pe))           setPE(config.pe);
       if (typeof config.totalCash === "number") setCash(config.totalCash);
       if (Array.isArray(config.assetClasses)) setAC(config.assetClasses);
+      if (config.goldEtf)  setGoldEtf(config.goldEtf);
+      if (config.physGold) setPhysGold(config.physGold);
       showCfgMsg("ok", `✓ Configurazione importata (${config.exportedAt?.slice(0,10) ?? "?"})`);
     } catch (e) {
       showCfgMsg("err", `Errore: ${e.message}`);
@@ -880,21 +1073,16 @@ export default function App() {
     const idx = prev.findIndex((x) => x.id === s.id);
     return idx >= 0 ? prev.map((x) => x.id === s.id ? s : x) : [...prev, s];
   });
-  const savePE = (p) => setPE((prev) => {
-    const idx = prev.findIndex((x) => x.id === p.id);
-    return idx >= 0 ? prev.map((x) => x.id === p.id ? p : x) : [...prev, p];
-  });
 
   const deleteAsset = (id) => setAssets((prev) => prev.filter((a) => a.id !== id));
   const deleteSU    = (id) => setSU((prev) => prev.filter((s) => s.id !== id));
-  const deletePE    = (id) => setPE((prev) => prev.filter((p) => p.id !== id));
 
   const isLoading = Object.keys(loading).length > 0;
   const toggleLine = (dataKey) => setHiddenLines((prev) => {
     const next = new Set(prev); next.has(dataKey) ? next.delete(dataKey) : next.add(dataKey); return next;
   });
 
-  const isEmpty = assets.length === 0 && pe.length === 0 && startups.length === 0 && totalCash === 0;
+  const isEmpty = assets.length === 0 && goldTotal === 0 && startups.length === 0 && totalCash === 0;
 
   // ====================== TAB: OVERVIEW ======================
   const renderOverview = () => (
@@ -905,17 +1093,17 @@ export default function App() {
           <h2 className="welcome-title">Benvenuto in Portfolio Tracker</h2>
           <p className="welcome-desc">
             Inizia aggiungendo i tuoi investimenti dalla sezione <strong>Portafoglio</strong>.
-            Puoi aggiungere ETF, azioni, startup, private equity e liquidità.
+            Puoi aggiungere ETF, azioni, startup, oro e liquidità.
           </p>
           <button className="btn btn-primary" onClick={() => setTab("portfolio")} style={{ fontSize: 15, padding: "10px 24px" }}>
             <Plus size={16}/> Inizia ad aggiungere asset
           </button>
           <div className="welcome-features">
             <div className="wf-item"><span>📈</span> Prezzi live via JustETF</div>
+            <div className="wf-item"><span>🥇</span> Prezzo oro 18kt live</div>
             <div className="wf-item"><span>🎯</span> Ribilanciamento automatico</div>
             <div className="wf-item"><span>📷</span> Snapshot mensili</div>
             <div className="wf-item"><span>🔮</span> Proiezioni future</div>
-            <div className="wf-item"><span>🛡️</span> Metriche di rischio</div>
             <div className="wf-item"><span>💾</span> Backup configurazione</div>
           </div>
         </div>
@@ -977,7 +1165,10 @@ export default function App() {
               <h3 className="section-title"><BarChart2 size={16}/> Composizione</h3>
               <div className="stat-row"><span>ETF / Asset quotati</span><strong>{fmt(totals.val)}</strong></div>
               <div className="stat-row"><span>Startup</span><strong>{fmt(suTotal)}</strong></div>
-              <div className="stat-row"><span>Private Equity</span><strong>{fmt(peTotal)}</strong></div>
+              <div className="stat-row">
+                <span>🥇 Oro</span>
+                <strong>{fmt(goldTotal)}</strong>
+              </div>
               <div className="stat-row"><span>Liquidità</span><strong>{fmt(totalCash)}</strong></div>
             </div>
           </div>
@@ -1087,7 +1278,7 @@ export default function App() {
           <div>
             <h3 className="section-title" style={{ margin: 0 }}><Settings size={16}/> Configurazione portafoglio</h3>
             <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-              Esporta e importa tutta la tua configurazione (asset, startup, PE, liquidità, asset class) in un file JSON.
+              Esporta e importa tutta la tua configurazione (asset, startup, oro, liquidità, asset class) in un file JSON.
             </p>
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
@@ -1263,48 +1454,182 @@ export default function App() {
         )}
       </div>
 
-      {/* Private Equity */}
-      <div className="section-card">
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <h2 className="section-title" style={{ margin: 0 }}><Shield size={16}/> Private Equity (ELTIF)</h2>
-            {pe.length > 0 && <span className="muted" style={{ fontSize: 13 }}>Totale: <strong>{fmt(peTotal)}</strong></span>}
+      {/* =================== ORO =================== */}
+      <div className="section-card" style={{ borderColor: goldTotal > 0 ? "rgba(245,158,11,0.4)" : undefined }}>
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20, flexWrap: "wrap", gap: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <h2 className="section-title" style={{ margin: 0 }}>
+              <span style={{ fontSize: 17, marginRight: 4 }}>🥇</span> Oro
+            </h2>
+            {goldTotal > 0 && (
+              <div className="kpi-mini-row" style={{ marginBottom: 0 }}>
+                <span>Totale: <strong style={{ color: "var(--amber)" }}>{fmt(goldTotal)}</strong></span>
+                {grandTotal > 0 && (
+                  <span>
+                    <strong>{((goldTotal / grandTotal) * 100).toFixed(1)}%</strong>
+                    <span className="muted"> del patrimonio</span>
+                  </span>
+                )}
+              </div>
+            )}
           </div>
-          <button className="btn btn-primary" onClick={() => setPEModal({})}><Plus size={15}/> Aggiungi ELTIF</button>
+          <button
+            className="btn btn-ghost"
+            onClick={refreshGoldPrices}
+            disabled={goldLoading || isLoading}
+            style={{ fontSize: 13 }}
+          >
+            <RefreshCw size={14} className={(goldLoading || loading[goldEtf.id]) ? "spin" : ""}/>
+            {goldLoading ? "Aggiornamento…" : "Aggiorna prezzi oro"}
+          </button>
         </div>
-        {pe.length === 0 ? (
-          <EmptyState icon={Shield} title="Nessun fondo PE / ELTIF"
-            description="Aggiungi fondi di private equity, ELTIF o altri investimenti illiquidi. Il prezzo va aggiornato manualmente."
-            action={<button className="btn btn-primary" onClick={() => setPEModal({})}><Plus size={15}/> Aggiungi ELTIF</button>}/>
-        ) : (
-          <div className="table-wrap">
-            <table className="data-table">
-              <thead><tr><th>Nome</th><th>ISIN</th><th className="num">P. Acquisto</th><th className="num">P. Attuale</th><th className="num">Perf</th><th></th></tr></thead>
-              <tbody>
-                {pe.map((f) => {
-                  const perf = f.costBasis ? r2(((f.lastPrice - f.costBasis) / f.costBasis) * 100) : 0;
-                  return (
-                    <tr key={f.id}>
-                      <td>{f.name}</td>
-                      <td className="mono muted">{f.identifier || "—"}</td>
-                      <td className="num mono">{fmt(f.costBasis)}</td>
-                      <td className="num mono">{fmt(f.lastPrice)}</td>
-                      <td className="num"><Badge value={perf}/></td>
-                      <td>
-                        <div className="row-actions">
-                          <button className="icon-btn" onClick={() => setPEModal(f)}><Edit2 size={14}/></button>
-                          <button className="icon-btn danger" onClick={() => { if (window.confirm(`Rimuovere ${f.name}?`)) deletePE(f.id); }}>
-                            <Trash2 size={14}/>
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+
+        {goldPriceErr && (
+          <div className="alert alert-amber" style={{ marginBottom: 16 }}>
+            <AlertTriangle size={14}/> {goldPriceErr}
+            <span style={{ fontSize: 12, marginLeft: 8, opacity: 0.8 }}>
+              — Assicurati che il backend esponga <code style={{ background: "rgba(0,0,0,0.2)", padding: "1px 5px", borderRadius: 4 }}>/api/gold-price</code>
+            </span>
           </div>
         )}
+
+        {/* ---- ETF Oro quotato ---- */}
+        <div style={{ marginBottom: 20 }}>
+          <div className="gold-sub-header">
+            <span className="gold-sub-label">ETF Oro quotato</span>
+            <button className="icon-btn" onClick={() => setGoldEtfModal(true)} title="Configura ETF oro">
+              <Edit2 size={14}/>
+            </button>
+          </div>
+
+          {!goldEtf.identifier ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px",
+              background: "rgba(245,158,11,0.06)", border: "1px dashed rgba(245,158,11,0.3)",
+              borderRadius: "var(--radius-sm)", color: "var(--amber)" }}>
+              <AlertTriangle size={14}/>
+              <span style={{ fontSize: 13 }}>
+                Configura l'ETF oro inserendo ISIN e quantità.
+              </span>
+              <button className="btn btn-ghost" style={{ marginLeft: "auto", padding: "4px 12px", fontSize: 12 }}
+                onClick={() => setGoldEtfModal(true)}>
+                Configura
+              </button>
+            </div>
+          ) : (
+            <div className="table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Nome</th><th>ISIN</th><th className="num">Quantità</th>
+                    <th className="num">P. Acquisto</th><th className="num">P. Attuale</th>
+                    <th className="num">Valore</th><th className="num">Perf €</th><th className="num">Perf %</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td className="asset-name">
+                      {loading[goldEtf.id] && <span className="loading-dot inline-dot"/>}
+                      {goldEtf.name}
+                    </td>
+                    <td className="mono muted">{goldEtf.identifier}</td>
+                    <td className="num mono">{goldEtf.quantity}</td>
+                    <td className="num mono">{fmt(goldEtf.costBasis)}</td>
+                    <td className="num mono">
+                      {goldEtf.lastPrice ? fmt(goldEtf.lastPrice) : <span className="muted">—</span>}
+                    </td>
+                    <td className="num mono"><strong>{goldEtfValue > 0 ? fmt(goldEtfValue) : "—"}</strong></td>
+                    <td className={`num mono ${goldEtfPerfE >= 0 ? "pos-text" : "neg-text"}`}>
+                      {goldEtf.lastPrice && goldEtf.costBasis
+                        ? `${goldEtfPerfE >= 0 ? "+" : ""}${fmt(goldEtfPerfE)}` : "—"}
+                    </td>
+                    <td className="num">
+                      {goldEtf.lastPrice && goldEtf.costBasis
+                        ? <Badge value={goldEtfPerfPct}/> : "—"}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* ---- Oro fisico 18kt ---- */}
+        <div style={{ borderTop: "1px solid var(--border)", paddingTop: 16 }}>
+          <div className="gold-sub-header">
+            <span className="gold-sub-label">Oro fisico 18kt</span>
+            <button className="icon-btn" onClick={() => setPhysGoldModal(true)} title="Modifica oro fisico">
+              <Edit2 size={14}/>
+            </button>
+          </div>
+
+          {physGold.grams === 0 ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px",
+              background: "var(--bg-card2)", border: "1px dashed var(--border)",
+              borderRadius: "var(--radius-sm)", color: "var(--text-muted)" }}>
+              <span style={{ fontSize: 13 }}>
+                Nessun oro fisico registrato. Clicca la matita per inserire la grammatura.
+              </span>
+              <button className="btn btn-ghost" style={{ marginLeft: "auto", padding: "4px 12px", fontSize: 12 }}
+                onClick={() => setPhysGoldModal(true)}>
+                Aggiungi
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="table-wrap">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Tipo</th>
+                      <th className="num">Grammatura</th>
+                      <th className="num">Prezzo 18kt /g</th>
+                      <th className="num">Valore totale</th>
+                      <th className="num" style={{ fontSize: 10, whiteSpace: "nowrap" }}>Ult. agg.</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>
+                        <span className="class-tag" style={{ background: "rgba(245,158,11,0.1)", borderColor: "rgba(245,158,11,0.3)", color: "var(--amber)" }}>
+                          18kt
+                        </span>
+                        {" "}Oro fisico
+                      </td>
+                      <td className="num mono"><strong>{physGold.grams} g</strong></td>
+                      <td className="num mono">
+                        {physGold.pricePerGram18kt
+                          ? <span style={{ color: "var(--amber)" }}>{fmt(physGold.pricePerGram18kt)}</span>
+                          : <span className="muted">—</span>}
+                      </td>
+                      <td className="num mono">
+                        <strong>{physGoldValue > 0 ? fmt(physGoldValue) : "—"}</strong>
+                      </td>
+                      <td className="num muted" style={{ fontSize: 11 }}>
+                        {physGold.lastUpdated
+                          ? new Date(physGold.lastUpdated).toLocaleDateString("it-IT")
+                          : "—"}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              {physGold.grams > 0 && !physGold.pricePerGram18kt && (
+                <p className="hint-text">
+                  ⚠ Prezzo 18kt non disponibile. Premi <strong>Aggiorna prezzi oro</strong> oppure inserisci il prezzo manualmente dalla matita.
+                </p>
+              )}
+              {physGold.grams > 0 && physGold.pricePerGram18kt && (
+                <p className="hint-text" style={{ color: "var(--text-muted)" }}>
+                  Calcolato come <strong>spot XAU/EUR (oz) ÷ 31,1035 × 0,75</strong> via gold-api.com.
+                  {physGold.lastUpdated && (
+                    <> Aggiornato il {new Date(physGold.lastUpdated).toLocaleString("it-IT")}.</>
+                  )}
+                </p>
+              )}
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -1601,8 +1926,18 @@ export default function App() {
       {startupModal !== null && (
         <StartupModal startup={startupModal?.id ? startupModal : null} onSave={saveSU} onClose={() => setStartupModal(null)}/>
       )}
-      {peModal !== null && (
-        <PEModal pe={peModal?.id ? peModal : null} onSave={savePE} onClose={() => setPEModal(null)}/>
+      {goldEtfModal && (
+        <GoldEtfModal goldEtf={goldEtf} onSave={(updated) => {
+          setGoldEtf(updated);
+          if (updated.identifier && isISIN(updated.identifier)) setTimeout(refreshGoldPrices, 300);
+        }} onClose={() => setGoldEtfModal(false)}/>
+      )}
+      {physGoldModal && (
+        <PhysGoldModal physGold={physGold} onSave={(updated) => {
+          setPhysGold(updated);
+          // Only fetch auto price if no manual override was given
+          if (!updated.pricePerGram18kt) fetchGoldSpotPrice().catch(() => {});
+        }} onClose={() => setPhysGoldModal(false)}/>
       )}
       {acModal && (
         <AssetClassModal classes={assetClasses} onSave={setAC} onClose={() => setACModal(false)}/>

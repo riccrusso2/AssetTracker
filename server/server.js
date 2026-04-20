@@ -42,6 +42,35 @@ app.get("/api/quote", async (req, res) => {
   }
 });
 
+// ── Gold price endpoint ───────────────────────────────────────
+// Calls gold-api.com for XAU/EUR spot price (per troy oz)
+// Returns: spotEurPerTroyOz, spotEurPerGram, price18ktPerGram
+app.get("/api/gold-price", async (req, res) => {
+  try {
+    const r = await fetch("https://api.gold-api.com/price/XAU/EUR", {
+      headers: { "User-Agent": "Mozilla/5.0", Accept: "application/json" },
+    });
+    if (!r.ok) throw new Error(`gold-api.com error: ${r.status}`);
+    const data = await r.json();
+
+    // data.price = EUR per troy oz (XAU standard)
+    const spotEurPerTroyOz = data.price;
+    // 1 troy oz = 31.1035 g  →  price per pure gram (24kt)
+    const spotEurPerGram = spotEurPerTroyOz / 31.1035;
+    // 18kt = 75% pure gold
+    const price18ktPerGram = spotEurPerGram * 0.75;
+
+    res.json({
+      spotEurPerTroyOz: Math.round(spotEurPerTroyOz * 100) / 100,
+      spotEurPerGram:   Math.round(spotEurPerGram   * 100) / 100,
+      price18ktPerGram: Math.round(price18ktPerGram * 100) / 100,
+      updatedAt: data.updatedAt,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── GET /api/snapshots ────────────────────────────────────────
 app.get("/api/snapshots", (req, res) => {
   try { res.json(readSnapshots()); }

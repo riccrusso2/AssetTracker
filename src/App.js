@@ -609,16 +609,22 @@ const PhysGoldModal = ({ physGold, onSave, onClose }) => {
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
   const handleSave = () => {
-    if (!form.grams) return;
-    onSave({
-      grams:            parseFloat(form.grams) || 0,
-      pricePerGram18kt: form.pricePerGram18kt !== "" && form.pricePerGram18kt != null
-        ? parseFloat(form.pricePerGram18kt) || null
-        : null,
-      lastUpdated: physGold.lastUpdated ?? null,
-    });
-    onClose();
-  };
+  if (!form.grams) return;
+
+  const hasManualPrice =
+    form.pricePerGram18kt !== "" && form.pricePerGram18kt != null;
+
+  onSave({
+    grams: parseFloat(form.grams) || 0,
+    pricePerGram18kt: hasManualPrice
+      ? parseFloat(form.pricePerGram18kt) || null
+      : null,
+    lastUpdated: physGold.lastUpdated ?? null,
+    manualOverride: hasManualPrice,
+  });
+
+  onClose();
+};
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -777,6 +783,7 @@ export default function App() {
   grams: 0,
   pricePerGram18kt: null,
   lastUpdated: null,
+  manualOverride: false,
 };
 
   const { fetchOne, loading, error } = usePriceFetcher();
@@ -818,14 +825,13 @@ export default function App() {
   }
 
   setPhysGold((prev) => ({
-    ...prev,
-    pricePerGram18kt:
-      prev.pricePerGram18kt != null && prev.lastUpdated && prev.manualOverride
-        ? prev.pricePerGram18kt
-        : r2(price18kt),
-    lastUpdated: data.updatedAt ?? new Date().toISOString(),
-  }));
-}, []);
+  ...prev,
+  pricePerGram18kt:
+    prev.pricePerGram18kt != null && prev.lastUpdated && prev.manualOverride
+      ? prev.pricePerGram18kt
+      : r2(price18kt),
+  lastUpdated: data.updatedAt ?? new Date().toISOString(),
+}));
 
 const refreshGoldPrices = useCallback(async () => {
   setGoldLoading(true);

@@ -173,23 +173,41 @@ const buildChartData = (snapshots) => {
 // ====================== CALCULATIONS ======================
 const calcTotals = (assets, goldEtf) => {
   let val = 0, cost = 0;
+
   for (const a of assets) {
-    if (a.lastPrice && a.quantity) val  += a.lastPrice * a.quantity;
+    if (a.lastPrice && a.quantity) val += a.lastPrice * a.quantity;
     if (a.costBasis && a.quantity) cost += a.costBasis * a.quantity;
   }
+
+  if (goldEtf && goldEtf.lastPrice && goldEtf.quantity) {
+    val += goldEtf.lastPrice * goldEtf.quantity;
+  }
+
+  if (goldEtf && goldEtf.costBasis && goldEtf.quantity) {
+    cost += goldEtf.costBasis * goldEtf.quantity;
+  }
+
   const ret = cost > 0 ? (val - cost) / cost : 0;
+
   const perfs = assets
     .filter((a) => a.lastPrice && a.costBasis)
-    .map((a) => ({ id: a.id, name: a.name, perf: (a.lastPrice - a.costBasis) / a.costBasis }));
-  
-  // Aggiungi Gold ETF se disponibile
+    .map((a) => ({
+      id: a.id,
+      name: a.name,
+      perf: (a.lastPrice - a.costBasis) / a.costBasis,
+    }));
+
   if (goldEtf && goldEtf.lastPrice && goldEtf.costBasis && goldEtf.quantity) {
-    const goldPerf = (goldEtf.lastPrice - goldEtf.costBasis) / goldEtf.costBasis;
-    perfs.push({ id: goldEtf.id, name: goldEtf.name, perf: goldPerf });
+    perfs.push({
+      id: goldEtf.id,
+      name: goldEtf.name,
+      perf: (goldEtf.lastPrice - goldEtf.costBasis) / goldEtf.costBasis,
+    });
   }
-  
-  const best  = perfs.length ? perfs.reduce((p, c) => c.perf > p.perf ? c : p) : null;
-  const worst = perfs.length ? perfs.reduce((p, c) => c.perf < p.perf ? c : p) : null;
+
+  const best = perfs.length ? perfs.reduce((p, c) => (c.perf > p.perf ? c : p)) : null;
+  const worst = perfs.length ? perfs.reduce((p, c) => (c.perf < p.perf ? c : p)) : null;
+
   return { val, cost, ret, best, worst };
 };
 
@@ -839,7 +857,7 @@ export default function App() {
   }, [fetchOne, fetchGoldSpotPrice]);
 
   // ---- Derived ----
-  const totals = useMemo(() => calcTotals(assets), [assets]);
+const totals = useMemo(() => calcTotals(assets, goldEtf), [assets, goldEtf]);
   const weights   = useMemo(() => calcWeights(assets, totals.val), [assets, totals.val]);
   const classDist = useMemo(() => calcClassDist(assets), [assets]);
   const driftAssets = useMemo(() => {
@@ -867,17 +885,11 @@ export default function App() {
   );
 
   const drift = useMemo(
-    () => calcDrift(driftAssets, totals.val + goldEtfValue),
-    [driftAssets, totals.val, goldEtfValue]
-  );
-  const combinedTotals = useMemo(() => {
-    let val  = totals.val;
-    let cost = totals.cost;
-    if (goldEtf.lastPrice  && goldEtf.quantity) val  += goldEtf.lastPrice  * goldEtf.quantity;
-    if (goldEtf.costBasis  && goldEtf.quantity) cost += goldEtf.costBasis  * goldEtf.quantity;
-    const ret = cost > 0 ? (val - cost) / cost : 0;
-    return { val, cost, ret };
-  }, [totals, goldEtf]);
+  () => calcDrift(driftAssets, totals.val),
+  [driftAssets, totals.val]
+);
+
+  const combinedTotals = totals;
 
 
   // Physical gold: value only (no cost basis, no performance)
@@ -885,12 +897,12 @@ export default function App() {
     (physGold.pricePerGram18kt && physGold.grams) ? r2(physGold.pricePerGram18kt * physGold.grams) : 0,
     [physGold]);
 
-  const goldTotal  = goldEtfValue + physGoldValue;
+  const goldTotal = goldEtfValue + physGoldValue;
 
   const suTotal    = useMemo(() => startups.reduce((a, s) => a + (s.invested || 0), 0), [startups]);
   const suFees     = useMemo(() => startups.reduce((a, s) => a + (s.fee || 0), 0), [startups]);
   const suAbbonamenti = STARTUP_ABBONAMENTO;
-  const grandTotal = totals.val + totalCash + goldTotal + suTotal;
+  const grandTotal = totals.val + totalCash + physGoldValue + suTotal;
 
   const fullClassDist = useMemo(() => {
     const base = [...classDist];
@@ -910,9 +922,9 @@ export default function App() {
   }, [assets, goldEtf]);
 
   const rebalanceTotalVal = useMemo(
-    () => totals.val + goldEtfValue,
-    [totals.val, goldEtfValue]
-  );
+  () => totals.val,
+  [totals.val]
+);
 
   const rebalance = useMemo(
     () => calcRebalancing(rebalanceAssets, rebalanceTotalVal, monthBudget),
@@ -970,9 +982,9 @@ export default function App() {
 
   const weightBarData = useMemo(() => {
   const baseWeights = calcWeights(
-    goldEtf.lastPrice ? [...assets, goldEtf] : assets,
-    totals.val + (goldEtf.lastPrice ? goldEtfValue : 0)
-  );
+  goldEtf.lastPrice ? [...assets, goldEtf] : assets,
+  totals.val
+);
 
   return baseWeights
     .map((w) => ({
@@ -1198,8 +1210,13 @@ export default function App() {
           <div className="grid-4">
             <KpiCard label="Patrimonio totale" value={fmt(grandTotal, true)} icon={Wallet}
               sub={`Liquidità: ${fmt(totalCash)}`} color="blue"/>
-            <KpiCard label="ETF & Asset quotati" value={fmt(totals.val, true)} icon={Activity}
-              trend={combinedTotals.ret * 100} color="blue"/>
+            <KpiCard
+            label="ETF & Asset quotati"
+            value={fmt(totals.val, true)}
+            icon={Activity}
+            trend={totals.ret * 100}
+            color="blue"
+          />
             <KpiCard label="Oro" 
               value={fmt(goldTotal, true)}
               color={goldEtfValue >= goldEtfCost ? "green" : "red"}

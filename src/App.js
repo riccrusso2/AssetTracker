@@ -486,7 +486,7 @@ const AssetModal = ({ asset, assetClasses, onSave, onClose }) => {
 
 // ---- Modal Startup ----
 const StartupModal = ({ startup, onSave, onClose }) => {
-  const [form, setForm] = useState(startup || { name: "", invested: "", fee: "", abbonamento: "468" });
+  const [form, setForm] = useState(startup ? { ...startup, abbonamento: startup.abbonamento || "468" } : { name: "", invested: "", fee: "", abbonamento: "468" });
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const handleSave = () => {
     if (!form.name || !form.invested) return;
@@ -1141,9 +1141,8 @@ export default function App() {
               trend={totals.ret * 100} color="blue"/>
             <KpiCard label="Oro" 
               value={fmt(goldTotal, true)}
-              sub={goldEtfPerfPct !== 0 ? fmtPct(goldEtfPerfPct) : ""}
               color={goldEtfValue + physGoldValue >= goldEtfCost ? "green" : "red"}
-              trend={null}/>
+              trend={goldEtfPerfPct}/>
             <KpiCard label="Startup"
               value={fmt(suTotal, true)}
               sub={(suFees > 0 || suAbbonamenti > 0) ? `Commissioni: ${fmt(suFees)}, Abbonamento: ${fmt(suAbbonamenti)}` : ""}

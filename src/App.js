@@ -702,7 +702,6 @@ const usePriceFetcher = () => {
 const TABS = [
   { id: "overview",    label: "Overview",        icon: LayoutDashboard },
   { id: "portfolio",   label: "Portafoglio",     icon: Briefcase },
-  { id: "analytics",   label: "Analisi",         icon: BarChart2 },
   { id: "projection",  label: "Proiezione",      icon: LineChartIcon },
   { id: "rebalancing", label: "Ribilanciamento", icon: Target },
 ];
@@ -1114,7 +1113,7 @@ export default function App() {
           </button>
           <div className="welcome-features">
             <div className="wf-item"><span>📈</span> Prezzi live via JustETF</div>
-            <div className="wf-item"><span>🥇</span> Prezzo oro 18kt live</div>
+            <div className="wf-item"><span>💰</span> Prezzo oro 18kt live</div>
             <div className="wf-item"><span>🎯</span> Ribilanciamento automatico</div>
             <div className="wf-item"><span>📷</span> Snapshot mensili</div>
             <div className="wf-item"><span>🔮</span> Proiezioni future</div>
@@ -1128,16 +1127,17 @@ export default function App() {
               sub={`Liquidità: ${fmt(totalCash)}`} color="blue"/>
             <KpiCard label="ETF & Asset quotati" value={fmt(totals.val, true)} icon={Activity}
               trend={totals.ret * 100} color="blue"/>
-            <KpiCard label="Rendimento totale"
-              value={fmtPct(combinedTotals.ret * 100)}
-              sub={combinedTotals.val - combinedTotals.cost !== 0
-                ? `${combinedTotals.val - combinedTotals.cost >= 0 ? "+" : ""}${fmt(combinedTotals.val - combinedTotals.cost)}`
+            <KpiCard label="Oro" 
+              value={fmt(goldTotal, true)}
+              sub={goldEtfCost + (physGold.grams * (physGold.pricePerGram18kt || 0)) > 0
+                ? `${goldEtfValue + physGoldValue - (goldEtfCost + (physGold.grams * (physGold.pricePerGram18kt || 0))) >= 0 ? "+" : ""}${fmt(goldEtfValue + physGoldValue - (goldEtfCost + (physGold.grams * (physGold.pricePerGram18kt || 0))))}`
                 : ""}
-              color={combinedTotals.ret >= 0 ? "green" : "red"}/>
-            <KpiCard label="Drift portafoglio"
-              value={drift.toFixed(1) + "%"}
-              sub={drift > 10 ? "⚠ Ribilanciamento consigliato" : "✓ Allineato ai target"}
-              color={drift > 10 ? "amber" : "green"} icon={Target}/>
+              color={goldEtfValue + physGoldValue >= goldEtfCost + (physGold.grams * (physGold.pricePerGram18kt || 0)) ? "green" : "red"}
+              trend={goldEtfCost + (physGold.grams * (physGold.pricePerGram18kt || 0)) > 0 ? ((goldEtfValue + physGoldValue - (goldEtfCost + (physGold.grams * (physGold.pricePerGram18kt || 0)))) / (goldEtfCost + (physGold.grams * (physGold.pricePerGram18kt || 0)))) * 100 : 0}/>
+            <KpiCard label="Startup"
+              value={fmt(suTotal, true)}
+              sub={suFees > 0 ? `Commissioni: ${fmt(suFees)}` : ""}
+              color="blue"/>
           </div>
 
           {snapshots.length > 2 && (
@@ -1182,7 +1182,7 @@ export default function App() {
               <div className="stat-row"><span>ETF / Asset quotati</span><strong>{fmt(totals.val)}</strong></div>
               <div className="stat-row"><span>Startup</span><strong>{fmt(suTotal)}</strong></div>
               <div className="stat-row">
-                <span>🥇 Oro</span>
+                <span>Oro</span>
                 <strong>{fmt(goldTotal)}</strong>
               </div>
               <div className="stat-row"><span>Liquidità</span><strong>{fmt(totalCash)}</strong></div>
@@ -1426,57 +1426,13 @@ export default function App() {
         )}
       </div>
 
-      {/* Startup */}
-      <div className="section-card">
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <h2 className="section-title" style={{ margin: 0 }}><Activity size={16}/> Investimenti Startup</h2>
-            {startups.length > 0 && (
-              <div className="kpi-mini-row" style={{ marginBottom: 0 }}>
-                <span>Totale: <strong>{fmt(suTotal)}</strong></span>
-                <span>Commissioni: <strong>{fmt(suFees)}</strong></span>
-              </div>
-            )}
-          </div>
-          <button className="btn btn-primary" onClick={() => setStartupModal({})}><Plus size={15}/> Aggiungi startup</button>
-        </div>
-        {startups.length === 0 ? (
-          <EmptyState icon={Activity} title="Nessuna startup"
-            description="Traccia gli investimenti in startup e fondi di venture capital. Inserisci l'importo investito e le eventuali commissioni."
-            action={<button className="btn btn-primary" onClick={() => setStartupModal({})}><Plus size={15}/> Aggiungi startup</button>}/>
-        ) : (
-          <div className="table-wrap">
-            <table className="data-table">
-              <thead><tr><th>Nome</th><th className="num">Importo investito</th><th className="num">Commissioni</th><th></th></tr></thead>
-              <tbody>
-                {startups.map((s) => (
-                  <tr key={s.id}>
-                    <td>{s.name}</td>
-                    <td className="num mono"><strong>{fmt(s.invested)}</strong></td>
-                    <td className="num mono">{fmt(s.fee)}</td>
-                    <td>
-                      <div className="row-actions">
-                        <button className="icon-btn" onClick={() => setStartupModal(s)}><Edit2 size={14}/></button>
-                        <button className="icon-btn danger" onClick={() => { if (window.confirm(`Rimuovere ${s.name}?`)) deleteSU(s.id); }}>
-                          <Trash2 size={14}/>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
       {/* =================== ORO =================== */}
       <div className="section-card" style={{ borderColor: goldTotal > 0 ? "rgba(245,158,11,0.4)" : undefined }}>
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20, flexWrap: "wrap", gap: 10 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
             <h2 className="section-title" style={{ margin: 0 }}>
-              <span style={{ fontSize: 17, marginRight: 4 }}>🥇</span> Oro
+              Oro
             </h2>
             {goldTotal > 0 && (
               <div className="kpi-mini-row" style={{ marginBottom: 0 }}>
@@ -1647,102 +1603,50 @@ export default function App() {
           )}
         </div>
       </div>
-    </div>
-  );
 
-  // ====================== TAB: ANALYTICS ======================
-  const renderAnalytics = () => (
-    <div className="tab-content">
-      {assets.length === 0 ? (
-        <EmptyState icon={BarChart2} title="Nessun dato da analizzare"
-          description="Aggiungi dei asset nella sezione Portafoglio per vedere i grafici di analisi."/>
-      ) : (
-        <>
-          <div className="grid-2">
-            <div className="section-card">
-              <h3 className="section-title"><BarChart2 size={16}/> Performance per asset (%)</h3>
-              {perfBarData.length === 0 ? (
-                <p className="muted" style={{ padding: "2rem 0", textAlign: "center" }}>
-                  Aggiorna i prezzi per vedere le performance.
-                </p>
-              ) : (
-                <div style={{ height: 320 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={perfBarData} layout="vertical" margin={{ left: 20, right: 30 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false}/>
-                      <XAxis type="number" unit="%" tick={{ fontSize: 11 }} stroke="var(--text-muted)"/>
-                      <YAxis type="category" dataKey="name" width={130} tick={{ fontSize: 11 }} stroke="var(--text-muted)"/>
-                      <ReTooltip formatter={(v) => [v.toFixed(2) + "%", "Performance"]}/>
-                      <ReferenceLine x={0} stroke="var(--text-muted)" strokeDasharray="4 2"/>
-                      <Bar dataKey="value" name="Performance %">
-                        {perfBarData.map((e, i) => <Cell key={i} fill={e.value >= 0 ? "#10b981" : "#ef4444"}/>)}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              )}
-            </div>
-            <div className="section-card">
-              <h3 className="section-title"><Target size={16}/> Peso attuale vs target (%)</h3>
-              {weightBarData.length === 0 ? (
-                <p className="muted" style={{ padding: "2rem 0", textAlign: "center" }}>
-                  Imposta pesi target per gli asset per vedere il confronto.
-                </p>
-              ) : (
-                <div style={{ height: 320 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={weightBarData} layout="vertical" margin={{ left: 20, right: 30 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false}/>
-                      <XAxis type="number" unit="%" tick={{ fontSize: 11 }} stroke="var(--text-muted)"/>
-                      <YAxis type="category" dataKey="name" width={130} tick={{ fontSize: 11 }} stroke="var(--text-muted)"/>
-                      <ReTooltip formatter={(v, n) => [v.toFixed(2) + "%", n]}/>
-                      <Legend/>
-                      <Bar dataKey="current" name="Peso attuale" fill="#3b82f6" radius={[0, 3, 3, 0]}/>
-                      <Bar dataKey="target"  name="Peso target"  fill="#94a3b8" radius={[0, 3, 3, 0]}/>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              )}
-            </div>
+      {/* Startup */}
+      <div className="section-card">
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <h2 className="section-title" style={{ margin: 0 }}><Activity size={16}/> Investimenti Startup</h2>
+            {startups.length > 0 && (
+              <div className="kpi-mini-row" style={{ marginBottom: 0 }}>
+                <span>Totale: <strong>{fmt(suTotal)}</strong></span>
+                <span>Commissioni: <strong>{fmt(suFees)}</strong></span>
+              </div>
+            )}
           </div>
-
-          <div className="section-card">
-            <h3 className="section-title"><Activity size={16}/> Indice di drift portafoglio</h3>
-            <div className="drift-meter">
-              <div className="drift-bar-wrap">
-                <div className="drift-bar-fill" style={{
-                  width: `${Math.min(drift * 2, 100)}%`,
-                  background: drift < 5 ? "var(--green)" : drift < 15 ? "var(--amber)" : "var(--red)"
-                }}/>
-              </div>
-              <div className="drift-labels">
-                <span>0%</span><span className="drift-value">{drift.toFixed(1)}%</span><span>50%+</span>
-              </div>
-            </div>
-            <p className="hint-text">
-              {drift < 5 ? "✓ Portafoglio allineato ai target." : drift < 15 ? "⚠ Leggero drift dai target." : "🚨 Drift elevato: considera un ribilanciamento."}
-            </p>
+          <button className="btn btn-primary" onClick={() => setStartupModal({})}><Plus size={15}/> Aggiungi startup</button>
+        </div>
+        {startups.length === 0 ? (
+          <EmptyState icon={Activity} title="Nessuna startup"
+            description="Traccia gli investimenti in startup e fondi di venture capital. Inserisci l'importo investito e le eventuali commissioni."
+            action={<button className="btn btn-primary" onClick={() => setStartupModal({})}><Plus size={15}/> Aggiungi startup</button>}/>
+        ) : (
+          <div className="table-wrap">
+            <table className="data-table">
+              <thead><tr><th>Nome</th><th className="num">Importo investito</th><th className="num">Commissioni</th><th></th></tr></thead>
+              <tbody>
+                {startups.map((s) => (
+                  <tr key={s.id}>
+                    <td>{s.name}</td>
+                    <td className="num mono"><strong>{fmt(s.invested)}</strong></td>
+                    <td className="num mono">{fmt(s.fee)}</td>
+                    <td>
+                      <div className="row-actions">
+                        <button className="icon-btn" onClick={() => setStartupModal(s)}><Edit2 size={14}/></button>
+                        <button className="icon-btn danger" onClick={() => { if (window.confirm(`Rimuovere ${s.name}?`)) deleteSU(s.id); }}>
+                          <Trash2 size={14}/>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-
-          {classDist.length > 0 && (
-            <div className="section-card">
-              <h3 className="section-title"><PieChartIcon size={16}/> Distribuzione per asset class (ETF & Asset quotati)</h3>
-              <div style={{ height: 260 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={classDist} dataKey="value" nameKey="name"
-                      cx="50%" cy="50%" outerRadius={100} innerRadius={55}
-                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
-                      {classDist.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]}/>)}
-                    </Pie>
-                    <ReTooltip formatter={(v, n) => [fmt(v), n]}/>
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          )}
-        </>
-      )}
+        )}
+      </div>
     </div>
   );
 
@@ -1928,7 +1832,6 @@ export default function App() {
       <main className="app-main">
         {tab === "overview"    && renderOverview()}
         {tab === "portfolio"   && renderPortfolio()}
-        {tab === "analytics"   && renderAnalytics()}
         {tab === "projection"  && renderProjection()}
         {tab === "rebalancing" && renderRebalancing()}
       </main>

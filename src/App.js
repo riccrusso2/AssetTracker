@@ -30,6 +30,7 @@ const STORAGE_KEYS = {
 
 const CONFIG_VERSION  = 3;
 const AUTO_REFRESH_MS = 900_000; // 15 min
+const STARTUP_ABBONAMENTO = 468;
 
 const MONTH_LABELS_IT = [
   "Gen","Feb","Mar","Apr","Mag","Giu",

@@ -58,6 +58,7 @@ const PHYS_GOLD_DEFAULT = {
   grams: 0,
   pricePerGram18kt: null,
   lastUpdated: null,
+  manualOverride: false,
 };
 
 // ====================== UTILITIES ======================
@@ -779,12 +780,7 @@ export default function App() {
 
   const [goldLoading,  setGoldLoading]  = useState(false);
   const [goldPriceErr, setGoldPriceErr] = useState(null);
-  const PHYS_GOLD_DEFAULT = {
-  grams: 0,
-  pricePerGram18kt: null,
-  lastUpdated: null,
-  manualOverride: false,
-};
+  
 
   const { fetchOne, loading, error } = usePriceFetcher();
   const assetsRef  = useRef(assets);

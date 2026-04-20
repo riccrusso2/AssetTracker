@@ -1837,7 +1837,6 @@ export default function App() {
               </tfoot>
             </table>
           </div>
-          // DOPO
           <p className="hint-text">
             I pesi target vengono normalizzati a 100%. Il budget viene allocato prioritariamente agli asset sottopesati, senza mai vendere.{" "}
             {goldEtf.identifier && goldEtf.lastPrice

@@ -135,12 +135,17 @@ const calcSharpe = (history, rf = 0.03) => {
 const calcSortino = (history, rf = 0.03) => {
   const r = calcReturns(history);
   if (r.length < 2) return null;
+
   const meanAnn = r.reduce((a, b) => a + b, 0) / r.length * 12;
   const neg = r.filter((x) => x < 0);
   if (!neg.length) return null;
+
   const downDev = Math.sqrt(
-  neg.reduce((a, b) => a + b ** 2, 0) / neg.length * 12
-);
+    (neg.reduce((a, b) => a + b ** 2, 0) / neg.length) * 12
+  );
+
+  return (meanAnn - rf) / downDev;
+};
 
 // ====================== SNAPSHOT HELPERS ======================
 const buildChartData = (snapshots) => {
@@ -841,18 +846,6 @@ export default function App() {
     return [...assets, goldEtf];
   }, [assets, goldEtf]);
 
-  const drift = useMemo(
-    () => calcDrift(driftAssets, totals.val + goldEtfValue),
-    [driftAssets, totals.val, goldEtfValue]
-  );
-  const combinedTotals = useMemo(() => {
-    let val  = totals.val;
-    let cost = totals.cost;
-    if (goldEtf.lastPrice  && goldEtf.quantity) val  += goldEtf.lastPrice  * goldEtf.quantity;
-    if (goldEtf.costBasis  && goldEtf.quantity) cost += goldEtf.costBasis  * goldEtf.quantity;
-    const ret = cost > 0 ? (val - cost) / cost : 0;
-    return { val, cost, ret };
-  }, [totals, goldEtf]);
   const goldEtfValue = useMemo(() =>
     (goldEtf.lastPrice && goldEtf.quantity) ? r2(goldEtf.lastPrice * goldEtf.quantity) : 0,
     [goldEtf]);
@@ -865,13 +858,26 @@ export default function App() {
       : 0,
     [goldEtf]
   );
-
   const goldEtfPerfPct = useMemo(() =>
     goldEtf.lastPrice && goldEtf.costBasis
       ? r2(((goldEtf.lastPrice - goldEtf.costBasis) / goldEtf.costBasis) * 100)
       : 0,
     [goldEtf]
   );
+
+  const drift = useMemo(
+    () => calcDrift(driftAssets, totals.val + goldEtfValue),
+    [driftAssets, totals.val, goldEtfValue]
+  );
+  const combinedTotals = useMemo(() => {
+    let val  = totals.val;
+    let cost = totals.cost;
+    if (goldEtf.lastPrice  && goldEtf.quantity) val  += goldEtf.lastPrice  * goldEtf.quantity;
+    if (goldEtf.costBasis  && goldEtf.quantity) cost += goldEtf.costBasis  * goldEtf.quantity;
+    const ret = cost > 0 ? (val - cost) / cost : 0;
+    return { val, cost, ret };
+  }, [totals, goldEtf]);
+
 
   // Physical gold: value only (no cost basis, no performance)
   const physGoldValue = useMemo(() =>

@@ -825,13 +825,14 @@ export default function App() {
   }
 
   setPhysGold((prev) => ({
-  ...prev,
-  pricePerGram18kt:
-    prev.pricePerGram18kt != null && prev.lastUpdated && prev.manualOverride
-      ? prev.pricePerGram18kt
-      : r2(price18kt),
-  lastUpdated: data.updatedAt ?? new Date().toISOString(),
-}));
+    ...prev,
+    pricePerGram18kt:
+      prev.pricePerGram18kt != null && prev.lastUpdated && prev.manualOverride
+        ? prev.pricePerGram18kt
+        : r2(price18kt),
+    lastUpdated: data.updatedAt ?? new Date().toISOString(),
+  }));
+}, []);
 
 const refreshGoldPrices = useCallback(async () => {
   setGoldLoading(true);

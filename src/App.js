@@ -486,7 +486,7 @@ const AssetModal = ({ asset, assetClasses, onSave, onClose }) => {
 
 // ---- Modal Startup ----
 const StartupModal = ({ startup, onSave, onClose }) => {
-  const [form, setForm] = useState(startup || { name: "", invested: "", fee: "", abbonamento: "" });
+  const [form, setForm] = useState(startup || { name: "", invested: "", fee: "", abbonamento: "468" });
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const handleSave = () => {
     if (!form.name || !form.invested) return;
@@ -867,7 +867,8 @@ export default function App() {
   const goldTotal  = goldEtfValue + physGoldValue;
 
   const suTotal    = useMemo(() => startups.reduce((a, s) => a + (s.invested || 0), 0), [startups]);
-  const suFees     = useMemo(() => startups.reduce((a, s) => a + (s.fee || 0) + (s.abbonamento || 0), 0), [startups]);
+  const suFees     = useMemo(() => startups.reduce((a, s) => a + (s.fee || 0), 0), [startups]);
+  const suAbbonamenti = useMemo(() => startups.reduce((a, s) => a + (s.abbonamento || 0), 0), [startups]);
   const grandTotal = totals.val + totalCash + goldTotal + suTotal;
 
   const fullClassDist = useMemo(() => {
@@ -1140,14 +1141,12 @@ export default function App() {
               trend={totals.ret * 100} color="blue"/>
             <KpiCard label="Oro" 
               value={fmt(goldTotal, true)}
-              sub={goldEtfCost > 0
-                ? `${goldEtfValue + physGoldValue - goldEtfCost >= 0 ? "+" : ""}${fmt(goldEtfValue + physGoldValue - goldEtfCost)}`
-                : ""}
+              sub={goldEtfPerfPct !== 0 ? fmtPct(goldEtfPerfPct) : ""}
               color={goldEtfValue + physGoldValue >= goldEtfCost ? "green" : "red"}
-              trend={goldEtfPerfPct}/>
+              trend={null}/>
             <KpiCard label="Startup"
               value={fmt(suTotal, true)}
-              sub={suFees > 0 ? `Commissioni: ${fmt(suFees)}` : ""}
+              sub={(suFees > 0 || suAbbonamenti > 0) ? `Commissioni: ${fmt(suFees)}, Abbonamento: ${fmt(suAbbonamenti)}` : ""}
               color="blue"/>
           </div>
 
@@ -1624,6 +1623,7 @@ export default function App() {
               <div className="kpi-mini-row" style={{ marginBottom: 0 }}>
                 <span>Totale: <strong>{fmt(suTotal)}</strong></span>
                 <span>Commissioni: <strong>{fmt(suFees)}</strong></span>
+                <span>Abbonamento: <strong>{fmt(suAbbonamenti)}</strong></span>
               </div>
             )}
           </div>

@@ -128,7 +128,7 @@ const calcMaxDrawdown = (history) => {
 const calcSharpe = (history, rf = 0.03) => {
   const cagr = calcCAGR(history);
   const vol  = calcVolatility(history);
-  if (!cagr || !vol || vol === 0) return null;
+  if (cagr == null || vol == null || vol === 0) return null;
   return (cagr - rf) / vol;
 };
 
@@ -813,14 +813,15 @@ export default function App() {
       throw new Error("Formato risposta /api/gold-price non valido");
     }
 
-    setPhysGold((prev) => ({
-      ...prev,
-      pricePerGram18kt: r2(price18kt),
-      lastUpdated: data.updatedAt ?? new Date().toISOString(),
-    }));
-  }, []);
+  setPhysGold((prev) => ({
+    ...prev,
+    pricePerGram18kt:
+      prev.pricePerGram18kt != null && prev.lastUpdated && prev.manualOverride
+        ? prev.pricePerGram18kt
+        : r2(price18kt),
+    lastUpdated: data.updatedAt ?? new Date().toISOString(),
+  }));
 
-  // ---- Refresh all gold prices (ETF + physical spot) ----
   const refreshGoldPrices = useCallback(async () => {
     setGoldLoading(true);
     setGoldPriceErr(null);
@@ -1929,9 +1930,19 @@ const totals = useMemo(() => calcTotals(assets, goldEtf), [assets, goldEtf]);
 
       {/* Modali */}
       {assetModal !== null && (
-        <AssetModal asset={assetModal?.id ? assetModal : null} assetClasses={assetClasses}
-          onSave={(a) => { saveAsset(a); if (!assetModal?.id) setTimeout(fetchAllPrices, 300); }}
-          onClose={() => setAssetModal(null)}/>
+        <AssetModal
+          asset={assetModal?.id ? assetModal : null}
+          assetClasses={assetClasses}
+          onSave={(a) => {
+            saveAsset(a);
+
+            // Fetch prezzi se ISIN valido (sia nuovo che modifica)
+            if (a.identifier && isISIN(a.identifier)) {
+              setTimeout(fetchAllPrices, 300);
+            }
+          }}
+          onClose={() => setAssetModal(null)}
+        />
       )}
       {startupModal !== null && (
         <StartupModal startup={startupModal?.id ? startupModal : null} onSave={saveSU} onClose={() => setStartupModal(null)}/>

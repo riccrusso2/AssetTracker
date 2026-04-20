@@ -773,6 +773,11 @@ export default function App() {
 
   const [goldLoading,  setGoldLoading]  = useState(false);
   const [goldPriceErr, setGoldPriceErr] = useState(null);
+  const PHYS_GOLD_DEFAULT = {
+  grams: 0,
+  pricePerGram18kt: null,
+  lastUpdated: null,
+};
 
   const { fetchOne, loading, error } = usePriceFetcher();
   const assetsRef  = useRef(assets);
@@ -797,21 +802,20 @@ export default function App() {
   // Calls /api/gold-price which proxies gold-api.com XAU/EUR
   // Backend returns: { spotEurPerTroyOz, spotEurPerGram, price18ktPerGram, updatedAt }
   const fetchGoldSpotPrice = useCallback(async () => {
-    const res = await fetch("/api/gold-price");
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
+  const res = await fetch("/api/gold-price");
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
 
-    // Use pre-computed 18kt price from backend
-    let price18kt = null;
-    if (typeof data.price18ktPerGram === "number") {
-      price18kt = data.price18ktPerGram;
-    } else if (typeof data.spotEurPerGram === "number") {
-      price18kt = r2(data.spotEurPerGram * 0.75);
-    } else if (typeof data.spotEurPerTroyOz === "number") {
-      price18kt = r2((data.spotEurPerTroyOz / 31.1035) * 0.75);
-    } else {
-      throw new Error("Formato risposta /api/gold-price non valido");
-    }
+  let price18kt = null;
+  if (typeof data.price18ktPerGram === "number") {
+    price18kt = data.price18ktPerGram;
+  } else if (typeof data.spotEurPerGram === "number") {
+    price18kt = r2(data.spotEurPerGram * 0.75);
+  } else if (typeof data.spotEurPerTroyOz === "number") {
+    price18kt = r2((data.spotEurPerTroyOz / 31.1035) * 0.75);
+  } else {
+    throw new Error("Formato risposta /api/gold-price non valido");
+  }
 
   setPhysGold((prev) => ({
     ...prev,
@@ -821,6 +825,7 @@ export default function App() {
         : r2(price18kt),
     lastUpdated: data.updatedAt ?? new Date().toISOString(),
   }));
+}, []);
 
   const refreshGoldPrices = useCallback(async () => {
     setGoldLoading(true);

@@ -830,7 +830,14 @@ export default function App() {
   const weights   = useMemo(() => calcWeights(assets, totals.val), [assets, totals.val]);
   const classDist = useMemo(() => calcClassDist(assets), [assets]);
   const drift     = useMemo(() => calcDrift(assets, totals.val), [assets, totals.val]);
-
+  const combinedTotals = useMemo(() => {
+    let val  = totals.val;
+    let cost = totals.cost;
+    if (goldEtf.lastPrice  && goldEtf.quantity) val  += goldEtf.lastPrice  * goldEtf.quantity;
+    if (goldEtf.costBasis  && goldEtf.quantity) cost += goldEtf.costBasis  * goldEtf.quantity;
+    const ret = cost > 0 ? (val - cost) / cost : 0;
+    return { val, cost, ret };
+  }, [totals, goldEtf]);
   const goldEtfValue = useMemo(() =>
     (goldEtf.lastPrice && goldEtf.quantity) ? r2(goldEtf.lastPrice * goldEtf.quantity) : 0,
     [goldEtf]);
@@ -964,13 +971,20 @@ export default function App() {
     const month = now.getMonth() + 1;
     const year  = now.getFullYear();
     const label = `${MONTH_LABELS_IT[month - 1]} ${year}`;
+    const goldEtfSnap = (goldEtf.lastPrice && goldEtf.quantity)
+      ? [{ id: goldEtf.id, name: goldEtf.name, price: goldEtf.lastPrice,
+          quantity: goldEtf.quantity, value: r2(goldEtf.lastPrice * goldEtf.quantity) }]
+      : [];
     const snapshotData = {
       label, month, year,
       totalValue: r2(grandTotal),
-      assets: assets.filter((a) => a.lastPrice).map((a) => ({
-        id: a.id, name: a.name, price: a.lastPrice,
-        quantity: a.quantity, value: r2((a.lastPrice || 0) * (a.quantity || 0)),
-      })),
+      assets: [
+        ...assets.filter((a) => a.lastPrice).map((a) => ({
+          id: a.id, name: a.name, price: a.lastPrice,
+          quantity: a.quantity, value: r2((a.lastPrice || 0) * (a.quantity || 0)),
+        })),
+        ...goldEtfSnap,
+      ],
     };
     setSnapSaving(true);
     setSnapMsg(null);
@@ -990,7 +1004,7 @@ export default function App() {
       setSnapSaving(false);
       setTimeout(() => setSnapMsg(null), 5000);
     }
-  }, [assets, grandTotal]);
+  }, [assets, grandTotal, goldEtf]);
 
   const exportSnapshotsFile = useCallback(() => {
     const blob = new Blob([JSON.stringify(snapshots, null, 2)], { type: "application/json" });
@@ -1115,9 +1129,11 @@ export default function App() {
             <KpiCard label="ETF & Asset quotati" value={fmt(totals.val, true)} icon={Activity}
               trend={totals.ret * 100} color="blue"/>
             <KpiCard label="Rendimento totale"
-              value={fmtPct(totals.ret * 100)}
-              sub={totals.val - totals.cost !== 0 ? `${totals.val - totals.cost >= 0 ? "+" : ""}${fmt(totals.val - totals.cost)}` : ""}
-              color={totals.ret >= 0 ? "green" : "red"}/>
+              value={fmtPct(combinedTotals.ret * 100)}
+              sub={combinedTotals.val - combinedTotals.cost !== 0
+                ? `${combinedTotals.val - combinedTotals.cost >= 0 ? "+" : ""}${fmt(combinedTotals.val - combinedTotals.cost)}`
+                : ""}
+              color={combinedTotals.ret >= 0 ? "green" : "red"}/>
             <KpiCard label="Drift portafoglio"
               value={drift.toFixed(1) + "%"}
               sub={drift > 10 ? "⚠ Ribilanciamento consigliato" : "✓ Allineato ai target"}

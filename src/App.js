@@ -136,7 +136,7 @@ const calcSortino = (history, rf = 0.03) => {
   const r = calcReturns(history);
   if (r.length < 2) return null;
 
-  const meanAnn = r.reduce((a, b) => a + b, 0) / r.length * 12;
+  const meanAnn = (r.reduce((a, b) => a + b, 0) / r.length) * 12;
   const neg = r.filter((x) => x < 0);
   if (!neg.length) return null;
 
@@ -144,6 +144,7 @@ const calcSortino = (history, rf = 0.03) => {
     (neg.reduce((a, b) => a + b ** 2, 0) / neg.length) * 12
   );
 
+  if (downDev === 0) return null;
   return (meanAnn - rf) / downDev;
 };
 

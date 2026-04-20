@@ -876,8 +876,24 @@ export default function App() {
     return base;
   }, [classDist, suTotal, goldTotal, totalCash]);
 
-  const rebalance = useMemo(() => calcRebalancing(assets, totals.val, monthBudget), [assets, totals.val, monthBudget]);
+  const rebalanceAssets = useMemo(() => {
+    if (!goldEtf.identifier || !goldEtf.lastPrice) return assets;
+    const goldForRebalance = {
+      ...goldEtf,
+      targetWeight: goldEtf.targetWeight > 0 ? goldEtf.targetWeight : 10,
+    };
+    return [...assets, goldForRebalance];
+  }, [assets, goldEtf]);
 
+  const rebalanceTotalVal = useMemo(
+    () => totals.val + goldEtfValue,
+    [totals.val, goldEtfValue]
+  );
+
+  const rebalance = useMemo(
+    () => calcRebalancing(rebalanceAssets, rebalanceTotalVal, monthBudget),
+    [rebalanceAssets, rebalanceTotalVal, monthBudget]
+  );
   const projData = useMemo(() => calcProjectionScenarios(grandTotal, projMonthly, projReturn, projYears),
     [grandTotal, projMonthly, projReturn, projYears]);
 
@@ -1773,8 +1789,12 @@ export default function App() {
               </tfoot>
             </table>
           </div>
+          // DOPO
           <p className="hint-text">
-            I pesi target vengono normalizzati a 100%. Il budget viene allocato prioritariamente agli asset sottopesati.
+            I pesi target vengono normalizzati a 100%. Il budget viene allocato prioritariamente agli asset sottopesati, senza mai vendere.{" "}
+            {goldEtf.identifier && goldEtf.lastPrice
+              ? <>🥇 ETF Oro incluso con target <strong>{goldEtf.targetWeight > 0 ? goldEtf.targetWeight : 10}%</strong>. Puoi modificarlo dalla sezione Portafoglio → Oro → ⚙️.</>
+              : <span style={{ color: "var(--amber)" }}>⚠ ETF Oro non configurato o senza prezzo — non incluso nel ribilanciamento.</span>}
           </p>
         </div>
       )}

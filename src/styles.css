@@ -353,3 +353,19 @@ html, body {
 .ac-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); }
 .ac-row:last-child { border-bottom: none; }
 .ac-name { flex: 1; font-size: 14px; font-weight: 500; color: var(--text); }
+
+/* =================== ORO SECTION =================== */
+.gold-sub-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.gold-sub-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--amber);
+  opacity: 0.8;
+}

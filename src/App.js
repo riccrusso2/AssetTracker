@@ -164,7 +164,7 @@ const buildChartData = (snapshots) => {
 };
 
 // ====================== CALCULATIONS ======================
-const calcTotals = (assets) => {
+const calcTotals = (assets, goldEtf) => {
   let val = 0, cost = 0;
   for (const a of assets) {
     if (a.lastPrice && a.quantity) val  += a.lastPrice * a.quantity;
@@ -174,6 +174,13 @@ const calcTotals = (assets) => {
   const perfs = assets
     .filter((a) => a.lastPrice && a.costBasis)
     .map((a) => ({ id: a.id, name: a.name, perf: (a.lastPrice - a.costBasis) / a.costBasis }));
+  
+  // Aggiungi Gold ETF se disponibile
+  if (goldEtf && goldEtf.lastPrice && goldEtf.costBasis && goldEtf.quantity) {
+    const goldPerf = (goldEtf.lastPrice - goldEtf.costBasis) / goldEtf.costBasis;
+    perfs.push({ id: goldEtf.id, name: goldEtf.name, perf: goldPerf });
+  }
+  
   const best  = perfs.length ? perfs.reduce((p, c) => c.perf > p.perf ? c : p) : null;
   const worst = perfs.length ? perfs.reduce((p, c) => c.perf < p.perf ? c : p) : null;
   return { val, cost, ret, best, worst };
@@ -479,12 +486,13 @@ const AssetModal = ({ asset, assetClasses, onSave, onClose }) => {
 
 // ---- Modal Startup ----
 const StartupModal = ({ startup, onSave, onClose }) => {
-  const [form, setForm] = useState(startup || { name: "", invested: "", fee: "" });
+  const [form, setForm] = useState(startup || { name: "", invested: "", fee: "", abbonamento: "" });
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const handleSave = () => {
     if (!form.name || !form.invested) return;
     onSave({ id: form.id || uid(), name: form.name,
-      invested: parseFloat(form.invested) || 0, fee: parseFloat(form.fee) || 0 });
+      invested: parseFloat(form.invested) || 0, fee: parseFloat(form.fee) || 0,
+      abbonamento: parseFloat(form.abbonamento) || 0 });
     onClose();
   };
   return (
@@ -503,6 +511,9 @@ const StartupModal = ({ startup, onSave, onClose }) => {
           </label>
           <label className="field-label">Commissioni (€)
             <input type="number" step="any" value={form.fee} onChange={(e) => set("fee", e.target.value)} className="field-input"/>
+          </label>
+          <label className="field-label">Abbonamento (€)
+            <input type="number" step="any" value={form.abbonamento} onChange={(e) => set("abbonamento", e.target.value)} className="field-input"/>
           </label>
         </div>
         <div className="modal-footer">
@@ -825,7 +836,7 @@ export default function App() {
   }, [fetchOne, fetchGoldSpotPrice]);
 
   // ---- Derived ----
-  const totals    = useMemo(() => calcTotals(assets), [assets]);
+  const totals    = useMemo(() => calcTotals(assets, goldEtf), [assets, goldEtf]);
   const weights   = useMemo(() => calcWeights(assets, totals.val), [assets, totals.val]);
   const classDist = useMemo(() => calcClassDist(assets), [assets]);
   const drift     = useMemo(() => calcDrift(assets, totals.val), [assets, totals.val]);
@@ -856,7 +867,7 @@ export default function App() {
   const goldTotal  = goldEtfValue + physGoldValue;
 
   const suTotal    = useMemo(() => startups.reduce((a, s) => a + (s.invested || 0), 0), [startups]);
-  const suFees     = useMemo(() => startups.reduce((a, s) => a + (s.fee || 0), 0), [startups]);
+  const suFees     = useMemo(() => startups.reduce((a, s) => a + (s.fee || 0) + (s.abbonamento || 0), 0), [startups]);
   const grandTotal = totals.val + totalCash + goldTotal + suTotal;
 
   const fullClassDist = useMemo(() => {
@@ -1129,11 +1140,11 @@ export default function App() {
               trend={totals.ret * 100} color="blue"/>
             <KpiCard label="Oro" 
               value={fmt(goldTotal, true)}
-              sub={goldEtfCost + (physGold.grams * (physGold.pricePerGram18kt || 0)) > 0
-                ? `${goldEtfValue + physGoldValue - (goldEtfCost + (physGold.grams * (physGold.pricePerGram18kt || 0))) >= 0 ? "+" : ""}${fmt(goldEtfValue + physGoldValue - (goldEtfCost + (physGold.grams * (physGold.pricePerGram18kt || 0))))}`
+              sub={goldEtfCost > 0
+                ? `${goldEtfValue + physGoldValue - goldEtfCost >= 0 ? "+" : ""}${fmt(goldEtfValue + physGoldValue - goldEtfCost)}`
                 : ""}
-              color={goldEtfValue + physGoldValue >= goldEtfCost + (physGold.grams * (physGold.pricePerGram18kt || 0)) ? "green" : "red"}
-              trend={goldEtfCost + (physGold.grams * (physGold.pricePerGram18kt || 0)) > 0 ? ((goldEtfValue + physGoldValue - (goldEtfCost + (physGold.grams * (physGold.pricePerGram18kt || 0)))) / (goldEtfCost + (physGold.grams * (physGold.pricePerGram18kt || 0)))) * 100 : 0}/>
+              color={goldEtfValue + physGoldValue >= goldEtfCost ? "green" : "red"}
+              trend={goldEtfPerfPct}/>
             <KpiCard label="Startup"
               value={fmt(suTotal, true)}
               sub={suFees > 0 ? `Commissioni: ${fmt(suFees)}` : ""}
@@ -1625,13 +1636,14 @@ export default function App() {
         ) : (
           <div className="table-wrap">
             <table className="data-table">
-              <thead><tr><th>Nome</th><th className="num">Importo investito</th><th className="num">Commissioni</th><th></th></tr></thead>
+              <thead><tr><th>Nome</th><th className="num">Importo investito</th><th className="num">Commissioni</th><th className="num">Abbonamento</th><th></th></tr></thead>
               <tbody>
                 {startups.map((s) => (
                   <tr key={s.id}>
                     <td>{s.name}</td>
                     <td className="num mono"><strong>{fmt(s.invested)}</strong></td>
                     <td className="num mono">{fmt(s.fee)}</td>
+                    <td className="num mono">{fmt(s.abbonamento)}</td>
                     <td>
                       <div className="row-actions">
                         <button className="icon-btn" onClick={() => setStartupModal(s)}><Edit2 size={14}/></button>

@@ -946,8 +946,11 @@ const totals = useMemo(() => calcTotals(assets, goldEtf), [assets, goldEtf]);
   const projROI      = totalContrib > 0 ? (projGain / totalContrib) * 100 : 0;
 
   const histForRisk = useMemo(() =>
-    snapshots.map((s) => ({ t: s.savedAt || `${s.year}-${String(s.month).padStart(2,"0")}-01`, v: s.totalValue })),
-    [snapshots]);
+  snapshots.map((s) => ({
+    t: `${s.year}-${String(s.month).padStart(2, "0")}-01`,  // ← sempre mese/anno
+    v: s.totalValue,
+  })),
+  [snapshots]);
 
   const riskMetrics = useMemo(() => ({
     cagr:    calcCAGR(histForRisk),

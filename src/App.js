@@ -307,28 +307,33 @@ const calcRebalancing = (assets, totalVal, budget) => {
 // Il peso attuale dell'oro include sia l'ETF oro che l'oro fisico.
 // Il budget oro viene però allocato solo sull'ETF oro (l'oro fisico è illiquido).
 // Livello 2 — distribuisce il budget ETF tra i singoli asset (mai vendere)
-const calcRebalancingTwoLevel = (etfAssets, goldEtf, physGoldValue, totalPortfolioVal, budget) => {
+//
+// grandTotal = portafoglio intero (ETF + oro fisico + cash + startup) — denominatore oro
+// liquidVal  = solo asset quotati incluso ETF oro (totals.val)        — denominatore ETF
+const calcRebalancingTwoLevel = (etfAssets, goldEtf, physGoldValue, grandTotal, liquidVal, budget) => {
   const goldTargetPct = goldEtf?.targetWeight || 0;
 
   const goldEtfVal = (goldEtf?.lastPrice && goldEtf?.quantity)
     ? r2(goldEtf.lastPrice * goldEtf.quantity) : 0;
 
-  // Oro TOTALE = ETF oro + oro fisico (per calcolo peso attuale)
+  // Oro TOTALE = ETF oro + oro fisico (per calcolo peso attuale sull'intero portafoglio)
   const goldTotalVal = r2(goldEtfVal + (physGoldValue || 0));
 
-  const goldCurrentPct = totalPortfolioVal > 0
-    ? r2((goldTotalVal / totalPortfolioVal) * 100) : 0;
+  // Peso oro calcolato sul PORTAFOGLIO INTERO (grandTotal)
+  const goldCurrentPct = grandTotal > 0
+    ? r2((goldTotalVal / grandTotal) * 100) : 0;
 
-  // Sotto-portafoglio ETF = portafoglio totale meno tutto l'oro
-  const etfTotalVal = r2(totalPortfolioVal - goldTotalVal);
+  // Sotto-portafoglio ETF = asset quotati (liquidVal) meno l'ETF oro
+  // Corrisponde ai pesi mostrati nella tabella ETF & Asset
+  const etfTotalVal = r2(liquidVal - goldEtfVal);
 
-  // Budget oro: quanto manca per portare l'oro al target considerando il nuovo totale
+  // Budget oro: quanto manca per portare l'oro al target sull'intero portafoglio
   // dopo il versamento del budget. "Buy only" — non si vende mai.
   let goldBudget = 0;
   let goldQty = 0;
   if (goldTargetPct > 0 && goldEtf?.lastPrice) {
-    const newTotal    = totalPortfolioVal + budget;
-    const goldNeeded  = r2((goldTargetPct / 100) * newTotal - goldTotalVal);
+    const newTotal   = grandTotal + budget;
+    const goldNeeded = r2((goldTargetPct / 100) * newTotal - goldTotalVal);
     if (goldNeeded > 0) {
       goldBudget = r2(Math.min(goldNeeded, budget));
       goldQty    = goldEtf.lastPrice > 0 ? r2(goldBudget / goldEtf.lastPrice) : 0;
@@ -964,8 +969,8 @@ const totals = useMemo(() => calcTotals(assets, goldEtf), [assets, goldEtf]);
   }, [classDist, suTotal, goldTotal, totalCash]);
 
   const rebalanceTwoLevel = useMemo(
-      () => calcRebalancingTwoLevel(assets, goldEtf, physGoldValue, grandTotal, monthBudget),
-      [assets, goldEtf, physGoldValue, grandTotal, monthBudget]
+      () => calcRebalancingTwoLevel(assets, goldEtf, physGoldValue, grandTotal, totals.val, monthBudget),
+      [assets, goldEtf, physGoldValue, grandTotal, totals.val, monthBudget]
     );
 
   const projData = useMemo(() => calcProjectionScenarios(grandTotal, projMonthly, projReturn, projYears),

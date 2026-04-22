@@ -322,13 +322,17 @@ const calcRebalancingTwoLevel = (etfAssets, goldEtf, physGoldValue, totalPortfol
   // Sotto-portafoglio ETF = portafoglio totale meno tutto l'oro
   const etfTotalVal = r2(totalPortfolioVal - goldTotalVal);
 
-  // Budget oro: proporzionale al target, 0 se oro già al target o sopra (mai vendere)
-  // Viene indirizzato sull'ETF oro (unico strumento liquido)
+  // Budget oro: quanto manca per portare l'oro al target considerando il nuovo totale
+  // dopo il versamento del budget. "Buy only" — non si vende mai.
   let goldBudget = 0;
   let goldQty = 0;
-  if (goldTargetPct > 0 && goldCurrentPct < goldTargetPct && goldEtf?.lastPrice) {
-    goldBudget = r2(budget * goldTargetPct / 100);
-    goldQty = goldEtf.lastPrice > 0 ? r2(goldBudget / goldEtf.lastPrice) : 0;
+  if (goldTargetPct > 0 && goldEtf?.lastPrice) {
+    const newTotal    = totalPortfolioVal + budget;
+    const goldNeeded  = r2((goldTargetPct / 100) * newTotal - goldTotalVal);
+    if (goldNeeded > 0) {
+      goldBudget = r2(Math.min(goldNeeded, budget));
+      goldQty    = goldEtf.lastPrice > 0 ? r2(goldBudget / goldEtf.lastPrice) : 0;
+    }
   }
   const etfBudget = r2(budget - goldBudget);
 
@@ -960,8 +964,8 @@ const totals = useMemo(() => calcTotals(assets, goldEtf), [assets, goldEtf]);
   }, [classDist, suTotal, goldTotal, totalCash]);
 
   const rebalanceTwoLevel = useMemo(
-      () => calcRebalancingTwoLevel(assets, goldEtf, physGoldValue, totals.val, monthBudget),
-      [assets, goldEtf, physGoldValue, totals.val, monthBudget]
+      () => calcRebalancingTwoLevel(assets, goldEtf, physGoldValue, grandTotal, monthBudget),
+      [assets, goldEtf, physGoldValue, grandTotal, monthBudget]
     );
 
   const projData = useMemo(() => calcProjectionScenarios(grandTotal, projMonthly, projReturn, projYears),

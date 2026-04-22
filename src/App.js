@@ -301,6 +301,31 @@ const calcRebalancing = (assets, totalVal, budget) => {
     })),
   };
 };
+// Two-level rebalancing:
+// Livello 1 — divide il budget tra Oro ETF (% del portafoglio totale) e ETF (% del sotto-portafoglio ETF)
+// Livello 2 — distribuisce il budget ETF tra i singoli asset con la logica esistente (mai vendere)
+const calcRebalancingTwoLevel = (etfAssets, goldEtf, totalPortfolioVal, budget) => {
+  const goldTargetPct = goldEtf?.targetWeight || 0;
+  const goldVal = (goldEtf?.lastPrice && goldEtf?.quantity)
+    ? r2(goldEtf.lastPrice * goldEtf.quantity) : 0;
+  const goldCurrentPct = totalPortfolioVal > 0
+    ? r2((goldVal / totalPortfolioVal) * 100) : 0;
+  const etfTotalVal = r2(totalPortfolioVal - goldVal);
+
+  // Oro sottopesato → quota proporzionale al target; già al target o sopra → 0 (mai vendere)
+  let goldBudget = 0;
+  let goldQty = 0;
+  if (goldTargetPct > 0 && goldCurrentPct < goldTargetPct && goldEtf?.lastPrice) {
+    goldBudget = r2(budget * goldTargetPct / 100);
+    goldQty = goldEtf.lastPrice > 0 ? r2(goldBudget / goldEtf.lastPrice) : 0;
+  }
+  const etfBudget = r2(budget - goldBudget);
+
+  // Ribilanciamento ETF: usa solo il valore del sotto-portafoglio ETF e il budget ETF
+  const etfRebalance = calcRebalancing(etfAssets, etfTotalVal, etfBudget);
+
+  return { goldBudget, goldQty, goldCurrentPct, goldTargetPct, etfBudget, etfRebalance };
+};
 
 const exportCSV = (assets) => {
   const header = "Nome,ISIN,Quantità,Prezzo Acquisto,Prezzo Attuale,Valore,Perf €,Perf %,Asset Class";
@@ -919,24 +944,11 @@ const totals = useMemo(() => calcTotals(assets, goldEtf), [assets, goldEtf]);
     return base;
   }, [classDist, suTotal, goldTotal, totalCash]);
 
-  const rebalanceAssets = useMemo(() => {
-    if (!goldEtf.identifier || !goldEtf.lastPrice) return assets;
-    const goldForRebalance = {
-      ...goldEtf,
-      targetWeight: goldEtf.targetWeight > 0 ? goldEtf.targetWeight : 10,
-    };
-    return [...assets, goldForRebalance];
-  }, [assets, goldEtf]);
-
-  const rebalanceTotalVal = useMemo(
-  () => totals.val,
-  [totals.val]
-);
-
-  const rebalance = useMemo(
-    () => calcRebalancing(rebalanceAssets, rebalanceTotalVal, monthBudget),
-    [rebalanceAssets, rebalanceTotalVal, monthBudget]
+  const rebalanceTwoLevel = useMemo(
+    () => calcRebalancingTwoLevel(assets, goldEtf, totals.val, monthBudget),
+    [assets, goldEtf, totals.val, monthBudget]
   );
+
   const projData = useMemo(() => calcProjectionScenarios(grandTotal, projMonthly, projReturn, projYears),
     [grandTotal, projMonthly, projReturn, projYears]);
 
@@ -1801,79 +1813,167 @@ const totals = useMemo(() => calcTotals(assets, goldEtf), [assets, goldEtf]);
   );
 
   // ====================== TAB: REBALANCING ======================
-  const renderRebalancing = () => (
-    <div className="tab-content">
-      {assets.length === 0 ? (
-        <EmptyState icon={Target} title="Nessun asset da ribilanciare"
-          description="Aggiungi asset con pesi target nella sezione Portafoglio per vedere i suggerimenti di ribilanciamento."/>
-      ) : (
-        <div className="section-card">
-          <h2 className="section-title"><Target size={16}/> Suggerimenti di ribilanciamento</h2>
-          <div className="kpi-mini-row" style={{ marginBottom: "1rem" }}>
-            <label className="field-label" style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              Budget mensile disponibile:
-              <input type="number" value={monthBudget} onChange={(e) => setBudget(parseFloat(e.target.value) || 0)}
-                step="100" min="0" className="field-input" style={{ width: 120 }}/>
-            </label>
-          </div>
-          {drift > 5 && (
-            <div className="alert alert-amber">
-              <AlertTriangle size={15}/> Drift del {drift.toFixed(1)}% — il portafoglio si è allontanato dai target.
+  // ====================== TAB: REBALANCING ======================
+  const renderRebalancing = () => {
+    const { goldBudget, goldQty, goldCurrentPct, goldTargetPct, etfBudget, etfRebalance } = rebalanceTwoLevel;
+    const hasGoldEtf = !!(goldEtf.identifier && goldEtf.lastPrice);
+
+    return (
+      <div className="tab-content">
+        {assets.length === 0 ? (
+          <EmptyState icon={Target} title="Nessun asset da ribilanciare"
+            description="Aggiungi asset con pesi target nella sezione Portafoglio per vedere i suggerimenti di ribilanciamento."/>
+        ) : (
+          <>
+            {/* Budget mensile + split */}
+            <div className="section-card">
+              <h2 className="section-title"><Target size={16}/> Ribilanciamento — budget mensile</h2>
+              <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: "1.2rem", flexWrap: "wrap" }}>
+                <label className="field-label" style={{ flexDirection: "row", alignItems: "center", gap: 8, margin: 0 }}>
+                  Budget disponibile:
+                  <input type="number" value={monthBudget} onChange={(e) => setBudget(parseFloat(e.target.value) || 0)}
+                    step="100" min="0" className="field-input" style={{ width: 120 }}/>
+                </label>
+              </div>
+
+              {/* Split card */}
+              <div className="grid-3" style={{ marginBottom: "1rem" }}>
+                <KpiCard
+                  label="🥇 Budget Oro ETF"
+                  value={fmt(goldBudget)}
+                  sub={hasGoldEtf
+                    ? `${goldTargetPct}% target · attuale ${goldCurrentPct}%`
+                    : "Nessun ETF oro configurato"}
+                  color={goldBudget > 0 ? "green" : "blue"}
+                />
+                <KpiCard
+                  label="📈 Budget ETF & Asset"
+                  value={fmt(etfBudget)}
+                  sub={`${assets.length} asset`}
+                  color="blue"
+                />
+                <KpiCard
+                  label="💼 Totale"
+                  value={fmt(monthBudget)}
+                  sub={hasGoldEtf && goldCurrentPct >= goldTargetPct
+                    ? "Oro al target → tutto agli ETF"
+                    : `Oro ${goldTargetPct}% · ETF ${100 - goldTargetPct}%`}
+                  color="blue"
+                />
+              </div>
+
+              {hasGoldEtf && goldCurrentPct >= goldTargetPct && (
+                <div className="alert alert-amber" style={{ marginBottom: 12 }}>
+                  <AlertTriangle size={15}/>
+                  Oro al {goldCurrentPct}% (target {goldTargetPct}%) — già al target o sopra, budget interamente allocato agli ETF.
+                </div>
+              )}
+
+              {drift > 5 && (
+                <div className="alert alert-amber">
+                  <AlertTriangle size={15}/> Drift del {drift.toFixed(1)}% — il portafoglio si è allontanato dai target.
+                </div>
+              )}
             </div>
-          )}
-          <div className="table-wrap">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Asset</th><th className="num">Peso attuale</th><th className="num">Target (norm.)</th>
-                  <th className="num">Delta €</th><th className="num">Qty Δ</th>
-                  <th className="num">Acquisto mese</th><th className="num">Qty acquisto</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rebalance.actions.map((x) => (
-                  <tr key={x.id}>
-                    <td>{x.name}</td>
-                    <td className="num mono">{x.curW.toFixed(2)}%</td>
-                    <td className="num mono">{x.tgtW.toFixed(2)}%</td>
-                    <td className={`num mono ${x.delta >= 0 ? "pos-text" : "neg-text"}`}>
-                      {x.delta >= 0 ? "+" : ""}{fmt(x.delta)}
-                    </td>
-                    <td className="num mono">{x.qty.toFixed(4)}</td>
-                    <td className="num mono pos-text">{fmt(x.monthlyBuy)}</td>
-                    <td className="num mono">{x.monthlyQty > 0 ? x.monthlyQty : "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr className="total-row">
-                  <td colSpan={5}><strong>Totale acquisto mensile</strong></td>
-                  <td className="num mono">
-                    {(() => {
-                      const total = r2(rebalance.actions.reduce((acc, x) => acc + (x.monthlyBuy || 0), 0));
-                      const diff  = r2(Math.abs(total - monthBudget));
-                      return (
-                        <span className={diff > 0.02 ? "neg-text" : "pos-text"}>
-                          <strong>{fmt(total)}</strong>{diff > 0.02 ? ` ⚠` : " ✓"}
-                        </span>
-                      );
-                    })()}
-                  </td>
-                  <td/>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-          <p className="hint-text">
-            I pesi target vengono normalizzati a 100%. Il budget viene allocato prioritariamente agli asset sottopesati, senza mai vendere.{" "}
-            {goldEtf.identifier && goldEtf.lastPrice
-              ? <>🥇 ETF Oro incluso con target <strong>{goldEtf.targetWeight > 0 ? goldEtf.targetWeight : 10}%</strong>. Puoi modificarlo dalla sezione Portafoglio → Oro → ⚙️.</>
-              : <span style={{ color: "var(--amber)" }}>⚠ ETF Oro non configurato o senza prezzo — non incluso nel ribilanciamento.</span>}
-          </p>
-        </div>
-      )}
-    </div>
-  );
+
+            {/* Oro ETF row */}
+            {hasGoldEtf && (
+              <div className="section-card" style={{ borderColor: "rgba(245,158,11,0.4)" }}>
+                <h3 className="section-title" style={{ marginBottom: 12 }}>🥇 Acquisto Oro ETF</h3>
+                <div className="table-wrap">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Asset</th>
+                        <th className="num">Peso attuale</th>
+                        <th className="num">Target</th>
+                        <th className="num">Acquisto mese</th>
+                        <th className="num">Quote acquisto</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td className="asset-name">{goldEtf.name}</td>
+                        <td className="num mono">{goldCurrentPct.toFixed(2)}%</td>
+                        <td className="num mono">{goldTargetPct.toFixed(2)}%</td>
+                        <td className="num mono pos-text">
+                          <strong>{goldBudget > 0 ? fmt(goldBudget) : <span className="muted">—</span>}</strong>
+                        </td>
+                        <td className="num mono">
+                          {goldQty > 0 ? goldQty : <span className="muted">—</span>}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                {goldBudget === 0 && (
+                  <p className="hint-text">Oro già al target o sopra — nessun acquisto suggerito questo mese.</p>
+                )}
+              </div>
+            )}
+
+            {/* ETF rebalancing */}
+            <div className="section-card">
+              <h3 className="section-title" style={{ marginBottom: 12 }}>
+                📈 Acquisto ETF & Asset — budget {fmt(etfBudget)}
+              </h3>
+              <div className="table-wrap">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Asset</th>
+                      <th className="num">Peso attuale</th>
+                      <th className="num">Target (norm.)</th>
+                      <th className="num">Delta €</th>
+                      <th className="num">Qty Δ</th>
+                      <th className="num">Acquisto mese</th>
+                      <th className="num">Qty acquisto</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {etfRebalance.actions.map((x) => (
+                      <tr key={x.id}>
+                        <td>{x.name}</td>
+                        <td className="num mono">{x.curW.toFixed(2)}%</td>
+                        <td className="num mono">{x.tgtW.toFixed(2)}%</td>
+                        <td className={`num mono ${x.delta >= 0 ? "pos-text" : "neg-text"}`}>
+                          {x.delta >= 0 ? "+" : ""}{fmt(x.delta)}
+                        </td>
+                        <td className="num mono">{x.qty.toFixed(4)}</td>
+                        <td className="num mono pos-text">{fmt(x.monthlyBuy)}</td>
+                        <td className="num mono">{x.monthlyQty > 0 ? x.monthlyQty : "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="total-row">
+                      <td colSpan={5}><strong>Totale acquisto ETF mensile</strong></td>
+                      <td className="num mono">
+                        {(() => {
+                          const total = r2(etfRebalance.actions.reduce((acc, x) => acc + (x.monthlyBuy || 0), 0));
+                          const diff  = r2(Math.abs(total - etfBudget));
+                          return (
+                            <span className={diff > 0.02 ? "neg-text" : "pos-text"}>
+                              <strong>{fmt(total)}</strong>{diff > 0.02 ? " ⚠" : " ✓"}
+                            </span>
+                          );
+                        })()}
+                      </td>
+                      <td/>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+              <p className="hint-text">
+                I pesi target ETF vengono normalizzati a 100% all'interno del sotto-portafoglio ETF.
+                Il budget viene allocato prioritariamente agli asset sottopesati, senza mai vendere.
+              </p>
+            </div>
+          </>
+        )}
+      </div>
+    );
+  };
 
   // ====================== RENDER ======================
   return (

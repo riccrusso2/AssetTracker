@@ -301,18 +301,29 @@ const calcRebalancing = (assets, totalVal, budget) => {
     })),
   };
 };
-// Two-level rebalancing:
-// Livello 1 — divide il budget tra Oro ETF (% del portafoglio totale) e ETF (% del sotto-portafoglio ETF)
-// Livello 2 — distribuisce il budget ETF tra i singoli asset con la logica esistente (mai vendere)
-const calcRebalancingTwoLevel = (etfAssets, goldEtf, totalPortfolioVal, budget) => {
-  const goldTargetPct = goldEtf?.targetWeight || 0;
-  const goldVal = (goldEtf?.lastPrice && goldEtf?.quantity)
-    ? r2(goldEtf.lastPrice * goldEtf.quantity) : 0;
-  const goldCurrentPct = totalPortfolioVal > 0
-    ? r2((goldVal / totalPortfolioVal) * 100) : 0;
-  const etfTotalVal = r2(totalPortfolioVal - goldVal);
 
-  // Oro sottopesato → quota proporzionale al target; già al target o sopra → 0 (mai vendere)
+// Two-level rebalancing:
+// Livello 1 — divide il budget tra Oro (ETF + fisico) e ETF quotati
+// Il peso attuale dell'oro include sia l'ETF oro che l'oro fisico.
+// Il budget oro viene però allocato solo sull'ETF oro (l'oro fisico è illiquido).
+// Livello 2 — distribuisce il budget ETF tra i singoli asset (mai vendere)
+const calcRebalancingTwoLevel = (etfAssets, goldEtf, physGoldValue, totalPortfolioVal, budget) => {
+  const goldTargetPct = goldEtf?.targetWeight || 0;
+
+  const goldEtfVal = (goldEtf?.lastPrice && goldEtf?.quantity)
+    ? r2(goldEtf.lastPrice * goldEtf.quantity) : 0;
+
+  // Oro TOTALE = ETF oro + oro fisico (per calcolo peso attuale)
+  const goldTotalVal = r2(goldEtfVal + (physGoldValue || 0));
+
+  const goldCurrentPct = totalPortfolioVal > 0
+    ? r2((goldTotalVal / totalPortfolioVal) * 100) : 0;
+
+  // Sotto-portafoglio ETF = portafoglio totale meno tutto l'oro
+  const etfTotalVal = r2(totalPortfolioVal - goldTotalVal);
+
+  // Budget oro: proporzionale al target, 0 se oro già al target o sopra (mai vendere)
+  // Viene indirizzato sull'ETF oro (unico strumento liquido)
   let goldBudget = 0;
   let goldQty = 0;
   if (goldTargetPct > 0 && goldCurrentPct < goldTargetPct && goldEtf?.lastPrice) {
@@ -321,10 +332,14 @@ const calcRebalancingTwoLevel = (etfAssets, goldEtf, totalPortfolioVal, budget) 
   }
   const etfBudget = r2(budget - goldBudget);
 
-  // Ribilanciamento ETF: usa solo il valore del sotto-portafoglio ETF e il budget ETF
   const etfRebalance = calcRebalancing(etfAssets, etfTotalVal, etfBudget);
 
-  return { goldBudget, goldQty, goldCurrentPct, goldTargetPct, etfBudget, etfRebalance };
+  return {
+    goldBudget, goldQty,
+    goldCurrentPct, goldTargetPct,
+    goldEtfVal, physGoldValue: physGoldValue || 0, goldTotalVal,
+    etfBudget, etfTotalVal, etfRebalance,
+  };
 };
 
 const exportCSV = (assets) => {
@@ -945,9 +960,9 @@ const totals = useMemo(() => calcTotals(assets, goldEtf), [assets, goldEtf]);
   }, [classDist, suTotal, goldTotal, totalCash]);
 
   const rebalanceTwoLevel = useMemo(
-    () => calcRebalancingTwoLevel(assets, goldEtf, totals.val, monthBudget),
-    [assets, goldEtf, totals.val, monthBudget]
-  );
+      () => calcRebalancingTwoLevel(assets, goldEtf, physGoldValue, totals.val, monthBudget),
+      [assets, goldEtf, physGoldValue, totals.val, monthBudget]
+    );
 
   const projData = useMemo(() => calcProjectionScenarios(grandTotal, projMonthly, projReturn, projYears),
     [grandTotal, projMonthly, projReturn, projYears]);
@@ -1813,9 +1828,12 @@ const totals = useMemo(() => calcTotals(assets, goldEtf), [assets, goldEtf]);
   );
 
   // ====================== TAB: REBALANCING ======================
-  // ====================== TAB: REBALANCING ======================
   const renderRebalancing = () => {
-    const { goldBudget, goldQty, goldCurrentPct, goldTargetPct, etfBudget, etfRebalance } = rebalanceTwoLevel;
+    const {
+      goldBudget, goldQty, goldCurrentPct, goldTargetPct,
+      goldEtfVal, physGoldValue: physGoldVal, goldTotalVal,
+      etfBudget, etfRebalance,
+    } = rebalanceTwoLevel;
     const hasGoldEtf = !!(goldEtf.identifier && goldEtf.lastPrice);
 
     return (
@@ -1836,14 +1854,15 @@ const totals = useMemo(() => calcTotals(assets, goldEtf), [assets, goldEtf]);
                 </label>
               </div>
 
-              {/* Split card */}
               <div className="grid-3" style={{ marginBottom: "1rem" }}>
                 <KpiCard
-                  label="🥇 Budget Oro ETF"
+                  label="🥇 Budget Oro"
                   value={fmt(goldBudget)}
-                  sub={hasGoldEtf
-                    ? `${goldTargetPct}% target · attuale ${goldCurrentPct}%`
-                    : "Nessun ETF oro configurato"}
+                  sub={
+                    hasGoldEtf
+                      ? `Target ${goldTargetPct}% · attuale ${goldCurrentPct}% (ETF ${fmt(goldEtfVal, true)} + fisico ${fmt(physGoldVal, true)})`
+                      : "Nessun ETF oro configurato"
+                  }
                   color={goldBudget > 0 ? "green" : "blue"}
                 />
                 <KpiCard
@@ -1855,9 +1874,11 @@ const totals = useMemo(() => calcTotals(assets, goldEtf), [assets, goldEtf]);
                 <KpiCard
                   label="💼 Totale"
                   value={fmt(monthBudget)}
-                  sub={hasGoldEtf && goldCurrentPct >= goldTargetPct
-                    ? "Oro al target → tutto agli ETF"
-                    : `Oro ${goldTargetPct}% · ETF ${100 - goldTargetPct}%`}
+                  sub={
+                    hasGoldEtf && goldCurrentPct >= goldTargetPct
+                      ? "Oro al target → tutto agli ETF"
+                      : `Oro ${goldTargetPct}% · ETF ${100 - goldTargetPct}%`
+                  }
                   color="blue"
                 />
               </div>
@@ -1865,7 +1886,7 @@ const totals = useMemo(() => calcTotals(assets, goldEtf), [assets, goldEtf]);
               {hasGoldEtf && goldCurrentPct >= goldTargetPct && (
                 <div className="alert alert-amber" style={{ marginBottom: 12 }}>
                   <AlertTriangle size={15}/>
-                  Oro al {goldCurrentPct}% (target {goldTargetPct}%) — già al target o sopra, budget interamente allocato agli ETF.
+                  {" "}Oro totale al {goldCurrentPct}% (ETF {fmt(goldEtfVal, true)} + fisico {fmt(physGoldVal, true)}) — già al target {goldTargetPct}% o sopra. Budget interamente allocato agli ETF.
                 </div>
               )}
 
@@ -1876,17 +1897,22 @@ const totals = useMemo(() => calcTotals(assets, goldEtf), [assets, goldEtf]);
               )}
             </div>
 
-            {/* Oro ETF row */}
+            {/* Oro ETF */}
             {hasGoldEtf && (
               <div className="section-card" style={{ borderColor: "rgba(245,158,11,0.4)" }}>
-                <h3 className="section-title" style={{ marginBottom: 12 }}>🥇 Acquisto Oro ETF</h3>
+                <h3 className="section-title" style={{ marginBottom: 4 }}>🥇 Acquisto Oro ETF</h3>
+                <p className="hint-text" style={{ marginBottom: 12 }}>
+                  Il peso attuale dell'oro ({goldCurrentPct}%) considera sia l'ETF oro ({fmt(goldEtfVal, true)})
+                  che l'oro fisico ({fmt(physGoldVal, true)}).
+                  Il budget viene indirizzato solo sull'ETF oro (l'oro fisico è illiquido).
+                </p>
                 <div className="table-wrap">
                   <table className="data-table">
                     <thead>
                       <tr>
                         <th>Asset</th>
-                        <th className="num">Peso attuale</th>
-                        <th className="num">Target</th>
+                        <th className="num">Peso oro attuale</th>
+                        <th className="num">Target oro</th>
                         <th className="num">Acquisto mese</th>
                         <th className="num">Quote acquisto</th>
                       </tr>
@@ -1907,7 +1933,9 @@ const totals = useMemo(() => calcTotals(assets, goldEtf), [assets, goldEtf]);
                   </table>
                 </div>
                 {goldBudget === 0 && (
-                  <p className="hint-text">Oro già al target o sopra — nessun acquisto suggerito questo mese.</p>
+                  <p className="hint-text">
+                    Oro (ETF + fisico) già al target o sopra — nessun acquisto ETF oro suggerito questo mese.
+                  </p>
                 )}
               </div>
             )}
@@ -1965,7 +1993,7 @@ const totals = useMemo(() => calcTotals(assets, goldEtf), [assets, goldEtf]);
                 </table>
               </div>
               <p className="hint-text">
-                I pesi target ETF vengono normalizzati a 100% all'interno del sotto-portafoglio ETF.
+                I pesi target ETF sono normalizzati a 100% all'interno del sotto-portafoglio ETF (escluso tutto l'oro).
                 Il budget viene allocato prioritariamente agli asset sottopesati, senza mai vendere.
               </p>
             </div>

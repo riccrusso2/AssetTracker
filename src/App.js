@@ -917,11 +917,6 @@ const totals = useMemo(() => calcTotals(assets, goldEtf), [assets, goldEtf]);
   const assetTotals = useMemo(() => calcTotals(assets, null), [assets]);
   const weights   = useMemo(() => calcWeights(assets, assetTotals.val), [assets, assetTotals.val]);
   const classDist = useMemo(() => calcClassDist(assets), [assets]);
-  const driftAssets = useMemo(() => {
-    if (!goldEtf.identifier || !goldEtf.lastPrice) return assets;
-    return [...assets, goldEtf];
-  }, [assets, goldEtf]);
-
   const goldEtfValue = useMemo(() =>
     (goldEtf.lastPrice && goldEtf.quantity) ? r2(goldEtf.lastPrice * goldEtf.quantity) : 0,
     [goldEtf]);
@@ -940,11 +935,6 @@ const totals = useMemo(() => calcTotals(assets, goldEtf), [assets, goldEtf]);
       : 0,
     [goldEtf]
   );
-
-  const drift = useMemo(
-  () => calcDrift(driftAssets, totals.val),
-  [driftAssets, totals.val]
-);
 
   const combinedTotals = totals;
 
@@ -968,6 +958,20 @@ const totals = useMemo(() => calcTotals(assets, goldEtf), [assets, goldEtf]);
     if (totalCash  > 0) base.push({ name: "Liquidità",  value: r2(totalCash) });
     return base;
   }, [classDist, suTotal, goldTotal, totalCash]);
+
+  // Drift a due livelli:
+  // - ETF: peso effettivo vs sotto-portafoglio ETF (assetTotals.val, senza oro ETF)
+  // - Oro: peso effettivo (ETF + fisico) vs grandTotal (intero patrimonio)
+  const drift = useMemo(() => {
+    const etfDrift = assets.reduce((acc, a) => {
+      const v = (a.lastPrice || 0) * (a.quantity || 0);
+      const actual = assetTotals.val > 0 ? (v / assetTotals.val) * 100 : 0;
+      return acc + Math.abs(actual - (a.targetWeight || 0));
+    }, 0);
+    const goldActual = grandTotal > 0 ? ((goldEtfValue + physGoldValue) / grandTotal) * 100 : 0;
+    const goldDrift  = goldEtf.identifier ? Math.abs(goldActual - (goldEtf.targetWeight || 0)) : 0;
+    return etfDrift + goldDrift;
+  }, [assets, assetTotals.val, goldEtfValue, physGoldValue, grandTotal, goldEtf]);
 
   const rebalanceTwoLevel = useMemo(
       () => calcRebalancingTwoLevel(assets, goldEtf, physGoldValue, grandTotal, totals.val, monthBudget),
@@ -1500,64 +1504,69 @@ const totals = useMemo(() => calcTotals(assets, goldEtf), [assets, goldEtf]);
             description="Aggiungi ETF, azioni o altri strumenti finanziari quotati. Il prezzo sarà aggiornato automaticamente se inserisci un ISIN valido."
             action={<button className="btn btn-primary" onClick={() => setAssetModal({})}><Plus size={15}/> Aggiungi il primo asset</button>}/>
         ) : (
-          <div className="table-wrap">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Nome</th><th>ISIN</th><th className="num">Quantità</th>
-                  <th className="num">P. Acquisto</th><th className="num">P. Attuale</th>
-                  <th className="num">Valore</th><th className="num">Perf €</th>
-                  <th className="num">Perf %</th><th className="num">Peso</th>
-                  <th className="num">Target</th><th>Classe</th><th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredAssets.map((a) => {
-                  const value  = a.lastPrice ? r2(a.lastPrice * (a.quantity || 0)) : 0;
-                  const perfE  = a.costBasis && a.lastPrice ? r2((a.lastPrice - a.costBasis) * (a.quantity || 0)) : 0;
-                  const perfP  = a.costBasis && a.lastPrice ? r2(((a.lastPrice - a.costBasis) / a.costBasis) * 100) : 0;
-                  const weight = weights.find((w) => w.id === a.id)?.weight || 0;
-                  const diff   = weight - (a.targetWeight || 0);
-                  return (
-                    <tr key={a.id}>
-                      <td className="asset-name">
-                        {loading[a.id] && <span className="loading-dot inline-dot"/>}
-                        {a.name}
-                      </td>
-                      <td className="mono muted">{a.identifier || "—"}</td>
-                      <td className="num mono">{a.quantity}</td>
-                      <td className="num mono">{fmt(a.costBasis)}</td>
-                      <td className="num mono">{a.lastPrice ? fmt(a.lastPrice) : <span className="muted">—</span>}</td>
-                      <td className="num mono"><strong>{value > 0 ? fmt(value) : "—"}</strong></td>
-                      <td className={`num mono ${perfE >= 0 ? "pos-text" : "neg-text"}`}>
-                        {a.lastPrice && a.costBasis ? `${perfE >= 0 ? "+" : ""}${fmt(perfE)}` : "—"}
-                      </td>
-                      <td className="num">{a.lastPrice && a.costBasis ? <Badge value={perfP}/> : "—"}</td>
-                      <td className="num mono">{weight.toFixed(1)}%</td>
-                      <td className="num">
-                        <span className={`target-badge ${Math.abs(diff) > 3 ? (diff > 0 ? "over" : "under") : "ok"}`}>
-                          {a.targetWeight || 0}%
-                        </span>
-                      </td>
-                      <td><span className="class-tag">{a.assetClass}</span></td>
-                      <td>
-                        <div className="row-actions">
-                          <button className="icon-btn" onClick={() => setAssetModal(a)}><Edit2 size={14}/></button>
-                          <button className="icon-btn danger" onClick={() => { if (window.confirm(`Rimuovere ${a.name}?`)) deleteAsset(a.id); }}>
-                            <Trash2 size={14}/>
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <>
+            <div className="table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Nome</th><th>ISIN</th><th className="num">Quantità</th>
+                    <th className="num">P. Acquisto</th><th className="num">P. Attuale</th>
+                    <th className="num">Valore</th><th className="num">Perf €</th>
+                    <th className="num">Perf %</th>
+                    <th className="num" title="Peso % sul sotto-portafoglio ETF (escluso oro) — somma 100%">Peso</th>
+                    <th className="num">Target</th><th>Classe</th><th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredAssets.map((a) => {
+                    const value  = a.lastPrice ? r2(a.lastPrice * (a.quantity || 0)) : 0;
+                    const perfE  = a.costBasis && a.lastPrice ? r2((a.lastPrice - a.costBasis) * (a.quantity || 0)) : 0;
+                    const perfP  = a.costBasis && a.lastPrice ? r2(((a.lastPrice - a.costBasis) / a.costBasis) * 100) : 0;
+                    const weight = weights.find((w) => w.id === a.id)?.weight || 0;
+                    const diff   = weight - (a.targetWeight || 0);
+                    return (
+                      <tr key={a.id}>
+                        <td className="asset-name">
+                          {loading[a.id] && <span className="loading-dot inline-dot"/>}
+                          {a.name}
+                        </td>
+                        <td className="mono muted">{a.identifier || "—"}</td>
+                        <td className="num mono">{a.quantity}</td>
+                        <td className="num mono">{fmt(a.costBasis)}</td>
+                        <td className="num mono">{a.lastPrice ? fmt(a.lastPrice) : <span className="muted">—</span>}</td>
+                        <td className="num mono"><strong>{value > 0 ? fmt(value) : "—"}</strong></td>
+                        <td className={`num mono ${perfE >= 0 ? "pos-text" : "neg-text"}`}>
+                          {a.lastPrice && a.costBasis ? `${perfE >= 0 ? "+" : ""}${fmt(perfE)}` : "—"}
+                        </td>
+                        <td className="num">{a.lastPrice && a.costBasis ? <Badge value={perfP}/> : "—"}</td>
+                        <td className="num mono">{weight.toFixed(1)}%</td>
+                        <td className="num">
+                          <span className={`target-badge ${Math.abs(diff) > 3 ? (diff > 0 ? "over" : "under") : "ok"}`}>
+                            {a.targetWeight || 0}%
+                          </span>
+                        </td>
+                        <td><span className="class-tag">{a.assetClass}</span></td>
+                        <td>
+                          <div className="row-actions">
+                            <button className="icon-btn" onClick={() => setAssetModal(a)}><Edit2 size={14}/></button>
+                            <button className="icon-btn danger" onClick={() => { if (window.confirm(`Rimuovere ${a.name}?`)) deleteAsset(a.id); }}>
+                              <Trash2 size={14}/>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <p className="hint-text" style={{ marginTop: 8 }}>
+              <strong>Peso</strong>: % sul totale ETF & Asset (escluso oro) — la somma è sempre 100%.
+              {" "}<strong>Target</strong>: obiettivo dichiarato in % del sotto-portafoglio ETF.
+            </p>
+          </>
         )}
       </div>
-
-      {/* =================== ORO =================== */}
       <div className="section-card" style={{ borderColor: goldTotal > 0 ? "rgba(245,158,11,0.4)" : undefined }}>
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20, flexWrap: "wrap", gap: 10 }}>
@@ -1620,40 +1629,65 @@ const totals = useMemo(() => calcTotals(assets, goldEtf), [assets, goldEtf]);
               </button>
             </div>
           ) : (
-            <div className="table-wrap">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Nome</th><th>ISIN</th><th className="num">Quantità</th>
-                    <th className="num">P. Acquisto</th><th className="num">P. Attuale</th>
-                    <th className="num">Valore</th><th className="num">Perf €</th><th className="num">Perf %</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td className="asset-name">
-                      {loading[goldEtf.id] && <span className="loading-dot inline-dot"/>}
-                      {goldEtf.name}
-                    </td>
-                    <td className="mono muted">{goldEtf.identifier}</td>
-                    <td className="num mono">{goldEtf.quantity}</td>
-                    <td className="num mono">{fmt(goldEtf.costBasis)}</td>
-                    <td className="num mono">
-                      {goldEtf.lastPrice ? fmt(goldEtf.lastPrice) : <span className="muted">—</span>}
-                    </td>
-                    <td className="num mono"><strong>{goldEtfValue > 0 ? fmt(goldEtfValue) : "—"}</strong></td>
-                    <td className={`num mono ${goldEtfPerfE >= 0 ? "pos-text" : "neg-text"}`}>
-                      {goldEtf.lastPrice && goldEtf.costBasis
-                        ? `${goldEtfPerfE >= 0 ? "+" : ""}${fmt(goldEtfPerfE)}` : "—"}
-                    </td>
-                    <td className="num">
-                      {goldEtf.lastPrice && goldEtf.costBasis
-                        ? <Badge value={goldEtfPerfPct}/> : "—"}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+            <>
+              <div className="table-wrap">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Nome</th><th>ISIN</th><th className="num">Quantità</th>
+                      <th className="num">P. Acquisto</th><th className="num">P. Attuale</th>
+                      <th className="num">Valore</th><th className="num">Perf €</th><th className="num">Perf %</th>
+                      <th className="num">Peso</th><th className="num">Target</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td className="asset-name">
+                        {loading[goldEtf.id] && <span className="loading-dot inline-dot"/>}
+                        {goldEtf.name}
+                      </td>
+                      <td className="mono muted">{goldEtf.identifier}</td>
+                      <td className="num mono">{goldEtf.quantity}</td>
+                      <td className="num mono">{fmt(goldEtf.costBasis)}</td>
+                      <td className="num mono">
+                        {goldEtf.lastPrice ? fmt(goldEtf.lastPrice) : <span className="muted">—</span>}
+                      </td>
+                      <td className="num mono"><strong>{goldEtfValue > 0 ? fmt(goldEtfValue) : "—"}</strong></td>
+                      <td className={`num mono ${goldEtfPerfE >= 0 ? "pos-text" : "neg-text"}`}>
+                        {goldEtf.lastPrice && goldEtf.costBasis
+                          ? `${goldEtfPerfE >= 0 ? "+" : ""}${fmt(goldEtfPerfE)}` : "—"}
+                      </td>
+                      <td className="num">
+                        {goldEtf.lastPrice && goldEtf.costBasis
+                          ? <Badge value={goldEtfPerfPct}/> : "—"}
+                      </td>
+                      {/* Peso oro (ETF + fisico) vs patrimonio totale */}
+                      <td className="num mono">
+                        {grandTotal > 0 && goldTotal > 0
+                          ? `${((goldTotal / grandTotal) * 100).toFixed(2)}%`
+                          : "—"}
+                      </td>
+                      <td className="num">
+                        {(() => {
+                          const goldPct = grandTotal > 0 ? (goldTotal / grandTotal) * 100 : 0;
+                          const tgt     = goldEtf.targetWeight || 0;
+                          const diff    = goldPct - tgt;
+                          return (
+                            <span className={`target-badge ${Math.abs(diff) > 3 ? (diff > 0 ? "over" : "under") : "ok"}`}>
+                              {tgt}%
+                            </span>
+                          );
+                        })()}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <p className="hint-text" style={{ marginTop: 6 }}>
+                <strong>Peso</strong>: (ETF oro + oro fisico) in % sul patrimonio totale.
+                {" "}<strong>Target</strong>: obiettivo % sul patrimonio totale.
+              </p>
+            </>
           )}
         </div>
 
@@ -2000,8 +2034,8 @@ const totals = useMemo(() => calcTotals(assets, goldEtf), [assets, goldEtf]);
                 </table>
               </div>
               <p className="hint-text">
-                I pesi target ETF sono normalizzati a 100% all'interno del sotto-portafoglio ETF (escluso tutto l'oro).
-                Il budget viene allocato prioritariamente agli asset sottopesati, senza mai vendere.
+                I pesi (Peso attuale e Target) sono calcolati all'interno del sotto-portafoglio ETF (escluso oro),
+                quindi sommano a 100%. Il budget viene allocato prioritariamente agli asset sottopesati, senza mai vendere.
               </p>
             </div>
           </>

@@ -914,7 +914,8 @@ const refreshGoldPrices = useCallback(async () => {
 
   // ---- Derived ----
 const totals = useMemo(() => calcTotals(assets, goldEtf), [assets, goldEtf]);
-  const weights   = useMemo(() => calcWeights(assets, totals.val), [assets, totals.val]);
+  const assetTotals = useMemo(() => calcTotals(assets, null), [assets]);
+  const weights   = useMemo(() => calcWeights(assets, assetTotals.val), [assets, assetTotals.val]);
   const classDist = useMemo(() => calcClassDist(assets), [assets]);
   const driftAssets = useMemo(() => {
     if (!goldEtf.identifier || !goldEtf.lastPrice) return assets;
@@ -1027,10 +1028,7 @@ const totals = useMemo(() => calcTotals(assets, goldEtf), [assets, goldEtf]);
 }, [assets, goldEtf]);
 
   const weightBarData = useMemo(() => {
-  const baseWeights = calcWeights(
-  goldEtf.lastPrice ? [...assets, goldEtf] : assets,
-  totals.val
-);
+  const baseWeights = calcWeights(assets, assetTotals.val);
 
   return baseWeights
     .map((w) => ({
@@ -1039,7 +1037,7 @@ const totals = useMemo(() => calcTotals(assets, goldEtf), [assets, goldEtf]);
       target: w.target,
     }))
     .filter((w) => w.target > 0 || w.current > 0.5);
-}, [assets, goldEtf, totals.val, goldEtfValue]);
+}, [assets, assetTotals.val]);
 
   const filteredAssets = useMemo(() =>
     search.trim()
@@ -1477,7 +1475,7 @@ const totals = useMemo(() => calcTotals(assets, goldEtf), [assets, goldEtf]);
         <div className="table-controls" style={{ marginBottom: 12 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <h2 className="section-title" style={{ margin: 0 }}><Briefcase size={16}/> ETF & Asset quotati</h2>
-            {totals.val > 0 && <span className="muted" style={{ fontSize: 13 }}>Totale: <strong>{fmt(totals.val)}</strong></span>}
+            {assetTotals.val > 0 && <span className="muted" style={{ fontSize: 13 }}>Totale: <strong>{fmt(assetTotals.val)}</strong></span>}
           </div>
           <div className="btn-row">
             <button className="btn btn-ghost" onClick={() => setACModal(true)} title="Gestisci asset class">

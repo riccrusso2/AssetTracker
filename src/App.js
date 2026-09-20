@@ -14,6 +14,7 @@ import {
   Activity, LayoutDashboard, Briefcase, Plus, CheckCircle,
   Shield, ChevronUp, ChevronDown, Wallet, Camera, Upload,
   Settings, Tag, LogOut, Share2, Copy, Eye, Link2, ArrowLeftRight,
+  PiggyBank, Receipt, HandCoins, Coins,
 } from "lucide-react";
 import "./styles.css";
 import {
@@ -32,6 +33,10 @@ import {
   projectionScenarios, projectionCapital, depletionYear, syntheticRows, isSynthetic, syntheticLabel,
   SYNTHETIC_RESIDUAL, PERIODS, sliceSnapshots, periodReturn, growthAttribution,
 } from "./metrics";
+import {
+  cashflowRows, cashflowTotals, emergencyFund, investableThisMonth,
+  planVsActual, cumulativeInvested, investedByYear, monthId, EF_WINDOW,
+} from "./cashflow";
 import { taxReport, bolloTitoli, latentTax, DEFAULT_TAX } from "./tax";
 import { apiFetch } from "./api";
 import { supabase } from "./supabaseClient";
@@ -47,9 +52,10 @@ const STORAGE_KEYS = {
   ASSET_CLASSES: "pf.assetclasses.v1",
   SETTINGS:      "pf.settings.v1",
   TRANSACTIONS:  "pf.transactions.v1",
+  CASHFLOW:      "pf.cashflow.v1",
 };
 
-const CONFIG_VERSION  = 4;   // v4: registro movimenti (`transactions`)
+const CONFIG_VERSION  = 5;   // v5: bilancio mensile (`cashflow`); v4: registro movimenti
 const AUTO_REFRESH_MS = 900_000; // 15 min
 
 // Impostazioni per-utente (Fase 10). Salvate nel blob config.data, editabili da UI.
@@ -65,6 +71,12 @@ const DEFAULT_SETTINGS = {
   benchmarkKey: "",         // snapKey dell'asset usato come riferimento
   taxRate: DEFAULT_TAX.rate,
   taxBollo: DEFAULT_TAX.bollo,
+  // Bilancio: mesi di spese da tenere liquidi prima di investire, e quota
+  // delle entrate destinata agli investimenti (0 = "non impostata", si usa
+  // quello che avanza).
+  emergencyMonths: 3,
+  investTargetPct: 0,
+  expenseBudget: 0,       // tetto di spesa mensile (0 = nessun tetto)
 };
 
 const MONTH_LABELS_IT = [
@@ -717,6 +729,121 @@ const SnapshotModal = ({ snap, preset, nearest, taken, onSave, onClose }) => {
   );
 };
 
+// ---- Modal Bilancio mensile ----
+// Tre campi e nient'altro: stipendio netto, entrate extra, spese totali.
+// Quanto si è investito NON si chiede — lo dice il registro movimenti, e un
+// quarto campo sarebbe la seconda fonte di verità sullo stesso numero.
+const CashflowModal = ({ month, taken, expenseBudget = 0, onSave, onClose }) => {
+  const dialogRef = useModalA11y(onClose);
+  const now = new Date();
+  const [form, setForm] = useState(month || {
+    year: now.getFullYear(), month: now.getMonth() + 1,
+    salary: "", extra: "", expenses: "", note: "",
+  });
+  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  const editing = !!month?.id;
+
+  const year  = parseInt(form.year, 10) || 0;
+  const mese  = parseInt(form.month, 10) || 0;
+  const dup   = !editing && taken.has(monthId(year, mese));
+  const salary   = parseFloat(form.salary) || 0;
+  const extra    = parseFloat(form.extra) || 0;
+  const expenses = parseFloat(form.expenses) || 0;
+  const income   = r2(salary + extra);
+  const savings  = r2(income - expenses);
+  const valid = year > 1990 && mese >= 1 && mese <= 12 && !dup && (income > 0 || expenses > 0);
+
+  const handleSave = () => {
+    if (!valid) return;
+    onSave({
+      id: month?.id || newId(),
+      year, month: mese,
+      salary: r2(salary), extra: r2(extra), expenses: r2(expenses),
+      note: (form.note || "").trim(),
+    });
+    onClose();
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" ref={dialogRef} role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3>{editing ? `Modifica ${MONTH_LABELS_IT[mese - 1]} ${year}` : "Aggiungi mese"}</h3>
+          <button className="icon-btn" onClick={onClose}><X size={18}/></button>
+        </div>
+        <div className="modal-body">
+          <label className="field-label">Anno *
+            <input type="number" value={form.year} disabled={editing}
+              onChange={(e) => set("year", e.target.value)} className="field-input"/>
+          </label>
+          <label className="field-label">Mese *
+            <select value={form.month} disabled={editing}
+              onChange={(e) => set("month", e.target.value)} className="field-input">
+              {MONTH_LABELS_IT.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+            </select>
+          </label>
+          <label className="field-label">Stipendio netto (€)
+            <input type="number" step="any" value={form.salary}
+              onChange={(e) => set("salary", e.target.value)} className="field-input"/>
+          </label>
+          <label className="field-label">Entrate extra (€)
+            <input type="number" step="any" value={form.extra}
+              onChange={(e) => set("extra", e.target.value)} className="field-input"/>
+            <span className="hint-text">Tredicesima, bonus, rimborsi, entrate occasionali.</span>
+          </label>
+          <label className="field-label">Spese totali (€)
+            <input type="number" step="any" value={form.expenses}
+              onChange={(e) => set("expenses", e.target.value)} className="field-input"/>
+          </label>
+          <label className="field-label">Note
+            <input value={form.note || ""} onChange={(e) => set("note", e.target.value)}
+              className="field-input" placeholder="es. vacanza, spesa straordinaria"/>
+          </label>
+
+          {(income > 0 || expenses > 0) && (
+            <div className="summary-strip">
+              <div className="ss-item">
+                <span className="ss-label">Entrate</span>
+                <span className="ss-value mono">{fmt(income)}</span>
+              </div>
+              <div className="ss-item">
+                <span className="ss-label">Risparmio</span>
+                <span className={`ss-value mono ${savings >= 0 ? "pos-text" : "neg-text"}`}>{fmt(savings)}</span>
+              </div>
+              <div className="ss-item">
+                <span className="ss-label">Tasso di risparmio</span>
+                <span className="ss-value mono">
+                  {income > 0 ? `${r2((savings / income) * 100)}%` : "—"}
+                </span>
+              </div>
+            </div>
+          )}
+          {expenseBudget > 0 && expenses > expenseBudget && (
+            <p className="hint-text" style={{ margin: 0, color: "var(--amber)" }}>
+              ⚠ Spese sopra il tetto mensile di {fmt(expenseBudget)} ({fmt(r2(expenses - expenseBudget))} in più).
+            </p>
+          )}
+          {dup && (
+            <p className="hint-text" style={{ margin: 0, color: "var(--red)" }}>
+              ⚠ Questo mese è già registrato: modificalo invece di crearne un altro.
+            </p>
+          )}
+          <p className="hint-text" style={{ margin: 0 }}>
+            Il <strong>versato</strong> del mese non si inserisce qui: viene calcolato
+            dai movimenti registrati nella tab Movimenti.
+          </p>
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-ghost" onClick={onClose}>Annulla</button>
+          <button className="btn btn-primary" onClick={handleSave} disabled={!valid}>
+            <CheckCircle size={15}/> Salva
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ---- Modal Movimento ----
 // options: [{ key, name }] — gli asset quotati su cui si può registrare un
 // movimento. La chiave è quella degli snapshot (nome slugificato), non l'id.
@@ -1181,6 +1308,7 @@ const usePriceFetcher = () => {
 // `short`: etichetta per la bottom nav mobile, dove lo spazio è ~70px per voce.
 const TABS = [
   { id: "overview",    label: "Overview",        short: "Overview",  icon: LayoutDashboard },
+  { id: "budget",      label: "Bilancio",        short: "Bilancio",  icon: PiggyBank },
   { id: "portfolio",   label: "Portafoglio",     short: "Portaf.",   icon: Briefcase },
   { id: "transactions",label: "Movimenti",       short: "Movim.",    icon: ArrowLeftRight },
   { id: "analysis",    label: "Analisi",         short: "Analisi",   icon: Activity },
@@ -1207,6 +1335,10 @@ export default function App({ session, shareToken } = {}) {
   const [physGold,     setPhysGold]= useLS(STORAGE_KEYS.PHYS_GOLD, PHYS_GOLD_DEFAULT, uid);
   const [settings,     setSettings]= useLS(STORAGE_KEYS.SETTINGS, DEFAULT_SETTINGS, uid);
   const [transactions, setTx]      = useLS(STORAGE_KEYS.TRANSACTIONS, [], uid);
+  // Bilancio mensile: entrate e spese inserite a mano. Il versato NON sta
+  // qui — si ricava dai movimenti (vedi cashflow.js), altrimenti sarebbero
+  // due fonti di verità sullo stesso numero.
+  const [cashflow,     setCashflow]= useLS(STORAGE_KEYS.CASHFLOW, [], uid);
 
   // Un asset con movimenti registrati prende da lì quantità e prezzo medio di
   // carico; gli altri restano com'erano stati inseriti a mano. Proiettando la
@@ -1256,6 +1388,7 @@ export default function App({ session, shareToken } = {}) {
   const [cashInput,     setCashInput]    = useState("");
   const [txModal,       setTxModal]      = useState(null);
   const [snapModal,     setSnapModal]    = useState(null);
+  const [cfModal,       setCfModal]      = useState(null);
 
   const [projYears,   setProjY] = useState(settings.projYears ?? 10);
   const [projReturn,  setProjR] = useState(settings.projReturn ?? 7);
@@ -1364,6 +1497,8 @@ export default function App({ session, shareToken } = {}) {
           // Assente nelle config precedenti alla v4: il portafoglio resta
           // quello inserito a mano finché non si registra il primo movimento.
           setTx(Array.isArray(cfg.transactions) ? cfg.transactions : []);
+          // Assente nelle config precedenti alla v5.
+          setCashflow(Array.isArray(cfg.cashflow) ? cfg.cashflow : []);
           const s = { ...DEFAULT_SETTINGS, ...(cfg.settings || {}) };
           setSettings(s);
           // Seed dei controlli proiezione/budget dai default salvati
@@ -1382,6 +1517,7 @@ export default function App({ session, shareToken } = {}) {
           setPhysGold(PHYS_GOLD_DEFAULT);
           setSettings(DEFAULT_SETTINGS);
           setTx([]);
+          setCashflow([]);
         }
       })
       // configLoaded arma l'auto-save: si imposta SOLO se il caricamento è
@@ -1866,6 +2002,44 @@ const refreshGoldPrices = useCallback(async () => {
     return cost > 0 ? r2((txRealized.income / cost) * 100) : null;
   }, [txRealized.income, transactions, assets, goldEtf]);
 
+  // ---- Bilancio mensile ----
+  // `cfRows` è l'unica forma che la UI legge: le entrate e le spese vengono da
+  // `cashflow`, il versato dal registro movimenti. Nessuno dei due numeri viene
+  // scritto due volte.
+  const cfRows   = useMemo(() => cashflowRows(cashflow, transactions), [cashflow, transactions]);
+  const cfTotals = useMemo(() => cashflowTotals(cfRows), [cfRows]);
+  const cfYear   = new Date().getFullYear();
+  const cfYtdRows = useMemo(() => cfRows.filter((r) => r.year === cfYear), [cfRows, cfYear]);
+  const cfYtd     = useMemo(() => cashflowTotals(cfYtdRows), [cfYtdRows]);
+  const cfCum     = useMemo(() => cumulativeInvested(cfYtdRows), [cfYtdRows]);
+  const cfPlan    = useMemo(() => planVsActual(cfRows, settings.investTargetPct ?? 0),
+    [cfRows, settings.investTargetPct]);
+
+  // Versato dell'anno dal solo registro: vale anche per i mesi di bilancio non
+  // ancora compilati, che nel cumulato sopra non compaiono.
+  const investedThisYear = useMemo(
+    () => investedByYear(transactions)[cfYear] ?? 0, [transactions, cfYear]);
+
+  const emergency = useMemo(() => emergencyFund({
+    cash: totalCash, rows: cfRows, months: settings.emergencyMonths ?? 3,
+  }), [totalCash, cfRows, settings.emergencyMonths]);
+
+  // Il mese in corso, se è già stato compilato. Se non lo è, il piano si basa
+  // sulla media dei mesi passati: meglio una stima dichiarata che un vuoto.
+  const cfThisMonth = useMemo(() => {
+    const now = new Date();
+    return cfRows.find((r) => r.year === now.getFullYear() && r.month === now.getMonth() + 1) ?? null;
+  }, [cfRows]);
+
+  const investable = useMemo(() => investableThisMonth({
+    savings:      cfThisMonth ? cfThisMonth.savings : cfTotals.avgSavings,
+    income:       cfThisMonth ? cfThisMonth.income  : cfTotals.avgIncome,
+    targetPct:    settings.investTargetPct ?? 0,
+    emergencyGap: emergency.gap,
+    cashSurplus:  emergency.surplus,
+  }), [cfThisMonth, cfTotals.avgSavings, cfTotals.avgIncome,
+       settings.investTargetPct, emergency.gap, emergency.surplus]);
+
   const growthRows = useMemo(() => growthAttribution(snapshots), [snapshots]);
   const growthTotals = useMemo(() => ({
     contrib: r2(growthRows.reduce((a, x) => a + x.contrib, 0)),
@@ -2018,7 +2192,7 @@ const refreshGoldPrices = useCallback(async () => {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             version: CONFIG_VERSION,
-            totalCash, startups, assetClasses, physGold, settings, transactions,
+            totalCash, startups, assetClasses, physGold, settings, transactions, cashflow,
             // Si salva sempre ciò che l'utente ha inserito, mai la posizione
             // ricalcolata dai movimenti: il derivato si rifà a ogni load.
             assets: storedAssets, goldEtf: storedGoldEtf,
@@ -2048,7 +2222,7 @@ const refreshGoldPrices = useCallback(async () => {
     return () => clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [configLoaded, storedAssets, startups, totalCash, assetClasses, storedGoldEtf,
-      physGold, settings, transactions]);
+      physGold, settings, transactions, cashflow]);
 
   const exportSnapshotsFile = useCallback(() => {
     const blob = new Blob([JSON.stringify(snapshots, null, 2)], { type: "application/json" });
@@ -2188,6 +2362,25 @@ const refreshGoldPrices = useCallback(async () => {
   };
   const deleteTx = (id) => setTx((prev) => prev.filter((t) => t.id !== id));
 
+  // ---- Bilancio: un record per mese ----
+  // L'identità è anno+mese, non l'id: due righe per lo stesso mese
+  // renderebbero ambiguo ogni tasso e il fondo di sicurezza.
+  const saveCfMonth = (m) => {
+    setCashflow((prev) => {
+      const idx = prev.findIndex((x) => x.year === m.year && x.month === m.month);
+      return idx >= 0 ? prev.map((x, i) => (i === idx ? { ...x, ...m } : x)) : [...prev, m];
+    });
+  };
+  const deleteCfMonth = (id) => setCashflow((prev) => prev.filter((m) => m.id !== id));
+
+  // Ponte bilancio → ribilanciamento: il budget del mese smette di essere un
+  // numero inventato nelle impostazioni e diventa quello che il bilancio dice
+  // di poter investire.
+  const applyInvestableBudget = (amount) => {
+    setBudget(r2(amount));
+    goTab("rebalancing");
+  };
+
   // Chiude il ciclo del ribilanciamento: gli acquisti proposti diventano
   // movimenti veri. Prima il piano restava un foglietto e le quantità si
   // correggevano a mano, senza che nulla registrasse se era stato seguito.
@@ -2265,7 +2458,9 @@ const refreshGoldPrices = useCallback(async () => {
   // modificabili, il registro movimenti perché è il dettaglio di quando e a
   // quanto si è comprato — si condivide il portafoglio, non lo storico ordini.
   const visibleTabs = readOnly
-    ? TABS.filter((t) => t.id !== "settings" && t.id !== "transactions")
+    // Il bilancio contiene lo stipendio: il server lo toglie dalla risposta
+    // pubblica (publicConfig), qui si toglie anche la tab.
+    ? TABS.filter((t) => !["settings", "transactions", "budget"].includes(t.id))
     : TABS;
 
   // ---- Routing per tab sull'hash ----
@@ -2340,6 +2535,14 @@ const refreshGoldPrices = useCallback(async () => {
                   <span className="chip">
                     <Camera size={12}/> {snapshots.length} snapshot
                   </span>
+                  {/* Il ponte col bilancio: il patrimonio dice dove sei, questo
+                      dice quanto puoi aggiungerci questo mese. */}
+                  {investable.available > 0 && (
+                    <span className="chip chip-ok"
+                      title={`Risparmio del mese meno quanto manca al fondo di sicurezza. Dettaglio nella tab Bilancio.${investable.extraFromCash > 0 ? ` Più ${fmt(investable.extraFromCash)} di liquidità già oltre il fondo.` : ""}`}>
+                      <PiggyBank size={12}/> Investibile {fmt(investable.available, true)}
+                    </span>
+                  )}
                 </div>
               }/>
             <KpiCard compact label="ETF & Asset quotati" value={fmt(totals.val, true)} icon={Activity}
@@ -2545,6 +2748,289 @@ const refreshGoldPrices = useCallback(async () => {
       )}
     </div>
   );
+
+  // ====================== TAB: BILANCIO ======================
+  // Il pezzo che collega lo stipendio al portafoglio: entrate e spese si
+  // inseriscono qui, il versato arriva dai movimenti, e la sintesi delle due
+  // cose è il budget del ribilanciamento.
+  const renderBudget = () => {
+    const cfLabel = (r) => `${MONTH_LABELS_IT[r.month - 1]} ${r.year}`;
+    const chartRows = cfRows.slice(-18).map((r) => ({
+      label: cfLabel(r),
+      entrate: r.income, spese: r.expenses, risparmio: r.savings, versato: r.invested,
+    }));
+    const planRows = cfPlan.slice(-18).map((r) => ({
+      label: cfLabel(r), piano: r.planned, versato: r.invested,
+    }));
+    const stima = !cfThisMonth;   // mese in corso non ancora compilato
+    const efPct = emergency.target > 0
+      ? Math.min(100, r2((emergency.cash / emergency.target) * 100)) : 0;
+    const overBudget = (settings.expenseBudget ?? 0) > 0 && cfThisMonth
+      && cfThisMonth.expenses > settings.expenseBudget;
+
+    return (
+      <div className="tab-content">
+        {cfRows.length === 0 ? (
+          <EmptyState icon={PiggyBank} title="Nessun mese registrato"
+            description="Registra stipendio, entrate extra e spese di ogni mese: l'app calcola quanto ti resta, quanto ne hai davvero investito (dai movimenti) e quanto puoi investire adesso senza intaccare il fondo di sicurezza."
+            action={
+              <button className="btn btn-primary" onClick={() => setCfModal({})}>
+                <Plus size={15}/> Aggiungi il primo mese
+              </button>
+            }/>
+        ) : (
+          <>
+            {/* Quanto posso investire — il ponte col ribilanciamento */}
+            <div className="section-card">
+              <div className="table-controls" style={{ marginBottom: 12 }}>
+                <h2 className="section-title" style={{ margin: 0 }}>
+                  <HandCoins size={16}/> Questo mese puoi investire
+                </h2>
+                <div className="btn-row">
+                  <button className="btn btn-primary" onClick={() => setCfModal({})}>
+                    <Plus size={15}/> Aggiungi mese
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid-4">
+                <KpiCard hero label={stima ? "Investibile (stima)" : "Investibile questo mese"}
+                  value={fmt(investable.available)} icon={PiggyBank}
+                  color={investable.available > 0 ? "green" : "amber"}
+                  sub={stima
+                    ? `Media degli ultimi ${cfTotals.months} mesi — il mese in corso non è ancora registrato`
+                    : `Da ${fmt(investable.planned)} di ${settings.investTargetPct > 0 ? `quota (${settings.investTargetPct}% delle entrate)` : "risparmio del mese"}`}
+                  footer={
+                    <div className="hero-chips">
+                      {investable.emergencyGap > 0 && (
+                        <span className="chip chip-warn" title="Prima si riempie il fondo di sicurezza">
+                          <AlertTriangle size={12}/> −{fmt(investable.emergencyGap)} al fondo
+                        </span>
+                      )}
+                      {investable.extraFromCash > 0 && (
+                        <span className="chip chip-ok" title="Liquidità già oltre il fondo di sicurezza: capitale fermo">
+                          <Wallet size={12}/> +{fmt(investable.extraFromCash)} da liquidità
+                        </span>
+                      )}
+                      <button className="btn btn-ghost" style={{ fontSize: 12, padding: "4px 10px" }}
+                        onClick={() => applyInvestableBudget(investable.available)}
+                        disabled={investable.available <= 0}>
+                        <Target size={12}/> Usa come budget
+                      </button>
+                    </div>
+                  }/>
+                <KpiCard compact label="Massimo investibile" value={fmt(investable.total, true)}
+                  color="blue" icon={Coins}
+                  sub="Risparmio del mese + liquidità eccedente il fondo"/>
+                <KpiCard compact label={`Versato nel ${cfYear}`} value={fmt(investedThisYear, true)}
+                  color="blue" icon={TrendingUp}
+                  sub={cfYtd.investmentRate != null
+                    ? `${cfYtd.investmentRate}% delle entrate dell'anno`
+                    : "Dai movimenti registrati"}/>
+                <KpiCard compact label="Tasso di risparmio"
+                  value={cfYtd.savingsRate != null ? `${cfYtd.savingsRate}%` : "—"}
+                  color={(cfYtd.savingsRate ?? 0) >= 20 ? "green" : "amber"} icon={PiggyBank}
+                  sub={`${cfYear} · risparmiati ${fmt(cfYtd.savings, true)} su ${fmt(cfYtd.income, true)}`}/>
+              </div>
+
+              {overBudget && (
+                <div className="alert alert-amber" style={{ marginTop: 12 }}>
+                  <AlertTriangle size={15}/>
+                  {" "}Spese di {cfLabel(cfThisMonth)} a {fmt(cfThisMonth.expenses)}, sopra il tetto
+                  di {fmt(settings.expenseBudget)} che ti sei dato: {fmt(r2(cfThisMonth.expenses - settings.expenseBudget))} in più.
+                </div>
+              )}
+            </div>
+
+            {/* Fondo di sicurezza */}
+            <div className="section-card">
+              <h3 className="section-title"><Shield size={16}/> Fondo di sicurezza</h3>
+              {emergency.target === 0 ? (
+                <p className="muted">
+                  Registra le spese di almeno un mese per dimensionare il fondo.
+                </p>
+              ) : (
+                <>
+                  <div className="summary-strip" style={{ marginBottom: 12 }}>
+                    <div className="ss-item">
+                      <span className="ss-label">Spesa media (ultimi {EF_WINDOW} mesi)</span>
+                      <span className="ss-value mono">{fmt(emergency.avgExpenses)}</span>
+                    </div>
+                    <div className="ss-item">
+                      <span className="ss-label">Bersaglio ({settings.emergencyMonths ?? 3} mesi)</span>
+                      <span className="ss-value mono">{fmt(emergency.target)}</span>
+                    </div>
+                    <div className="ss-item">
+                      <span className="ss-label">Liquidità</span>
+                      <span className="ss-value mono">{fmt(emergency.cash)}</span>
+                    </div>
+                    <div className="ss-item">
+                      <span className="ss-label">Mesi coperti</span>
+                      <span className={`ss-value mono ${emergency.ok ? "pos-text" : "neg-text"}`}>
+                        {emergency.monthsCovered != null ? emergency.monthsCovered.toFixed(1) : "—"}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="ef-bar" role="img"
+                    aria-label={`Fondo di sicurezza coperto al ${efPct}% del bersaglio`}>
+                    <div className={`ef-fill ${emergency.ok ? "ef-ok" : "ef-low"}`}
+                      style={{ width: `${efPct}%` }}/>
+                  </div>
+                  <p className="hint-text" style={{ marginTop: 8 }}>
+                    {emergency.ok
+                      ? `Fondo completo: ${fmt(emergency.surplus)} di liquidità oltre il bersaglio è capitale fermo, puoi investirlo.`
+                      : `Mancano ${fmt(emergency.gap)} al bersaglio. Il fondo viene prima degli investimenti: disinvestire durante un imprevisto significa vendere nel momento peggiore.`}
+                  </p>
+                </>
+              )}
+            </div>
+
+            {/* Entrate, spese, risparmio nel tempo */}
+            <div className="section-card">
+              <h3 className="section-title"><Activity size={16}/> Entrate, spese e risparmio</h3>
+              <div className="chart-legend">
+                <span className="cl-item"><span className="cl-swatch" style={{ background: C_GAIN }}/>Entrate</span>
+                <span className="cl-item"><span className="cl-swatch" style={{ background: C_LOSS }}/>Spese</span>
+                <span className="cl-item"><span className="cl-swatch" style={{ background: C_CONTRIB }}/>Risparmio</span>
+              </div>
+              <div style={{ height: 260 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={chartRows} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
+                    <CartesianGrid stroke="var(--border)" vertical={false}/>
+                    <XAxis dataKey="label" tick={{ fontSize: 10 }} stroke="var(--text-muted)"/>
+                    <YAxis tickFormatter={(v) => `€${(v / 1000).toFixed(1)}k`} tick={{ fontSize: 10 }}
+                      stroke="var(--text-muted)" width={56}/>
+                    <ReTooltip content={<CustomTooltip/>} cursor={{ fill: "var(--bg-card2)" }}/>
+                    <ReferenceLine y={0} stroke="var(--border2)"/>
+                    <Bar dataKey="entrate" name="Entrate" fill={C_GAIN} radius={[4, 4, 0, 0]}/>
+                    <Bar dataKey="spese"   name="Spese"   fill={C_LOSS} radius={[4, 4, 0, 0]}/>
+                    <Line type="monotone" dataKey="risparmio" name="Risparmio" stroke={C_CONTRIB}
+                      strokeWidth={2} dot={{ r: 3 }}/>
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Piano vs realizzato */}
+            <div className="section-card">
+              <h3 className="section-title"><Target size={16}/> Pianificato vs versato</h3>
+              <p className="hint-text" style={{ marginTop: 0, marginBottom: 12 }}>
+                {settings.investTargetPct > 0
+                  ? `Il piano è il ${settings.investTargetPct}% delle entrate del mese (Impostazioni → quota da investire).`
+                  : "Senza una quota impostata il piano è il risparmio del mese: tutto quello che avanza. Imposta una quota nelle Impostazioni per un obiettivo fisso."}
+                {" "}Il versato viene dai movimenti registrati.
+              </p>
+              <div className="chart-legend">
+                <span className="cl-item"><span className="cl-swatch" style={{ background: palette[2] }}/>Piano</span>
+                <span className="cl-item"><span className="cl-swatch" style={{ background: C_CONTRIB }}/>Versato</span>
+              </div>
+              <div style={{ height: 240 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={planRows} margin={{ top: 4, right: 16, left: 0, bottom: 4 }} barGap={2}>
+                    <CartesianGrid stroke="var(--border)" vertical={false}/>
+                    <XAxis dataKey="label" tick={{ fontSize: 10 }} stroke="var(--text-muted)"/>
+                    <YAxis tickFormatter={(v) => `€${(v / 1000).toFixed(1)}k`} tick={{ fontSize: 10 }}
+                      stroke="var(--text-muted)" width={56}/>
+                    <ReTooltip content={<CustomTooltip/>} cursor={{ fill: "var(--bg-card2)" }}/>
+                    <ReferenceLine y={0} stroke="var(--border2)"/>
+                    <Bar dataKey="piano"   name="Piano"   fill={palette[2]} radius={[4, 4, 0, 0]}/>
+                    <Bar dataKey="versato" name="Versato" fill={C_CONTRIB} radius={[4, 4, 0, 0]}/>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              {cfCum.length > 0 && (
+                <p className="hint-text">
+                  Cumulato {cfYear}: <strong>{fmt(cfCum.at(-1).cumulative)}</strong> versati
+                  nei {cfCum.length} mesi registrati
+                  {investedThisYear !== cfCum.at(-1).cumulative && (
+                    <> · {fmt(investedThisYear)} contando tutti i movimenti dell'anno,
+                    anche quelli di mesi non ancora inseriti nel bilancio</>
+                  )}.
+                </p>
+              )}
+            </div>
+
+            {/* Storico mensile */}
+            <div className="section-card">
+              <div className="table-controls" style={{ marginBottom: 12 }}>
+                <h3 className="section-title" style={{ margin: 0 }}>
+                  <Receipt size={16}/> Storico mensile
+                </h3>
+                <span className="muted" style={{ fontSize: 13 }}>
+                  {cfTotals.months} mesi · media risparmio {fmt(cfTotals.avgSavings)}
+                </span>
+              </div>
+              <div className="table-wrap">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Mese</th>
+                      <th className="num">Stipendio</th>
+                      <th className="num">Extra</th>
+                      <th className="num">Spese</th>
+                      <th className="num">Risparmio</th>
+                      <th className="num">Tasso risp.</th>
+                      <th className="num">Versato</th>
+                      <th className="num">Tasso invest.</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[...cfRows].reverse().map((r) => (
+                      <tr key={r.id}>
+                        <td className="asset-name">
+                          {cfLabel(r)}
+                          {r.note && <span className="muted" style={{ fontSize: 11 }}> · {r.note}</span>}
+                        </td>
+                        <td className="num mono">{fmt(r.salary)}</td>
+                        <td className="num mono">{r.extra ? fmt(r.extra) : "—"}</td>
+                        <td className="num mono">{fmt(r.expenses)}</td>
+                        <td className={`num mono ${r.savings >= 0 ? "pos-text" : "neg-text"}`}>{fmt(r.savings)}</td>
+                        <td className="num mono">{r.savingsRate != null ? `${r.savingsRate}%` : "—"}</td>
+                        <td className="num mono">{fmt(r.invested)}</td>
+                        <td className="num mono">{r.investmentRate != null ? `${r.investmentRate}%` : "—"}</td>
+                        <td>
+                          <div className="row-actions">
+                            <button className="icon-btn" onClick={() => setCfModal(r)} title="Modifica">
+                              <Edit2 size={14}/>
+                            </button>
+                            <button className="icon-btn danger" title="Elimina"
+                              onClick={() => { if (window.confirm(`Rimuovere il bilancio di ${cfLabel(r)}?`)) deleteCfMonth(r.id); }}>
+                              <Trash2 size={14}/>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="total-row">
+                      <td><strong>Totale</strong></td>
+                      <td className="num mono">{fmt(r2(cfTotals.income - cfRows.reduce((a, r) => a + r.extra, 0)))}</td>
+                      <td className="num mono">{fmt(r2(cfRows.reduce((a, r) => a + r.extra, 0)))}</td>
+                      <td className="num mono">{fmt(cfTotals.expenses)}</td>
+                      <td className={`num mono ${cfTotals.savings >= 0 ? "pos-text" : "neg-text"}`}>{fmt(cfTotals.savings)}</td>
+                      <td className="num mono">{cfTotals.savingsRate != null ? `${cfTotals.savingsRate}%` : "—"}</td>
+                      <td className="num mono">{fmt(cfTotals.invested)}</td>
+                      <td className="num mono">{cfTotals.investmentRate != null ? `${cfTotals.investmentRate}%` : "—"}</td>
+                      <td/>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+              <p className="hint-text" style={{ marginTop: 8 }}>
+                I tassi complessivi sono calcolati sui totali, non come media delle
+                percentuali mensili: altrimenti il mese della tredicesima peserebbe
+                quanto un mese normale.
+                {" "}La colonna <strong>Versato</strong> arriva dai movimenti (acquisti meno
+                vendite, commissioni comprese): i dividendi non contano come versamento.
+              </p>
+            </div>
+          </>
+        )}
+      </div>
+    );
+  };
 
   // ====================== TAB: PORTFOLIO ======================
   // Le colonne del registro compaiono solo se il registro è in uso: su un
@@ -3955,6 +4441,9 @@ const refreshGoldPrices = useCallback(async () => {
             { key: "rebalanceBand",       label: "Banda ribilanciamento (punti %)", set: null,    step: 0.5, min: 0, max: 25 },
             { key: "taxRate",             label: "Aliquota capital gain (%)",     set: null,      step: 0.5, min: 0, max: 50 },
             { key: "taxBollo",            label: "Bollo titoli annuo (%)",        set: null,      step: 0.05, min: 0, max: 2 },
+            { key: "emergencyMonths",     label: "Fondo di sicurezza (mesi di spese)", set: null, step: 1, min: 1, max: 24 },
+            { key: "investTargetPct",     label: "Quota entrate da investire (%)", set: null,     step: 1,   min: 0, max: 100 },
+            { key: "expenseBudget",       label: "Tetto di spesa mensile (€)",    set: null,      step: 50,  min: 0 },
           ].map(({ key, label, set, step, min, max }) => (
             <label key={key} className="field-label">
               {label}
@@ -3966,6 +4455,9 @@ const refreshGoldPrices = useCallback(async () => {
         </div>
         <p style={{ fontSize: 12, color: "var(--text-muted, #888)" }}>
           Le classi di asset si gestiscono dal pulsante dedicato nella tab Portafoglio.
+          {" "}<strong>Quota entrate da investire</strong> a 0 significa "non impostata":
+          il piano mensile diventa semplicemente quello che avanza dopo le spese.
+          {" "}<strong>Tetto di spesa</strong> a 0 disattiva l'avviso di sforamento.
         </p>
       </div>
     </div>
@@ -3989,6 +4481,19 @@ const refreshGoldPrices = useCallback(async () => {
             </label>
           ))}
         </div>
+
+        {cfTotals.avgInvested > 0 && r2(projMonthly) !== cfTotals.avgInvested && (
+          <p className="hint-text" style={{ marginTop: -8, marginBottom: "1.5rem" }}>
+            {/* La proiezione partiva da un numero desiderato. Il bilancio sa
+                quello vero, ed è l'unico che dice dove si finisce davvero. */}
+            Nei {cfTotals.months} mesi registrati hai versato in media{" "}
+            <strong>{fmt(cfTotals.avgInvested)}</strong> al mese.{" "}
+            <button className="btn btn-ghost" style={{ fontSize: 12, padding: "4px 10px" }}
+              onClick={() => setProjM(cfTotals.avgInvested)}>
+              <PiggyBank size={13}/> Proietta su questo
+            </button>
+          </p>
+        )}
 
         {/* Fase di prelievo */}
         <div style={{ marginBottom: "1.5rem" }}>
@@ -4100,6 +4605,13 @@ const refreshGoldPrices = useCallback(async () => {
                   <input type="number" value={monthBudget} onChange={(e) => setBudget(parseFloat(e.target.value) || 0)}
                     step="100" min="0" className="field-input" style={{ width: 120 }}/>
                 </label>
+                {investable.available > 0 && r2(monthBudget) !== investable.available && (
+                  <button className="btn btn-ghost" style={{ fontSize: 12, padding: "6px 12px" }}
+                    onClick={() => setBudget(investable.available)}
+                    title="Risparmio del mese al netto di quanto manca al fondo di sicurezza">
+                    <PiggyBank size={13}/> Usa l'investibile del mese ({fmt(investable.available)})
+                  </button>
+                )}
                 {(settings.rebalanceBand ?? 0) > 0 && (
                   <span className="muted" style={{ fontSize: 13 }}>
                     Banda di tolleranza: <strong>{settings.rebalanceBand}</strong> punti — chi è più
@@ -4377,6 +4889,7 @@ const refreshGoldPrices = useCallback(async () => {
 
       <main className="app-main">
         {tab === "overview"    && renderOverview()}
+        {tab === "budget"      && !readOnly && renderBudget()}
         {tab === "portfolio"   && renderPortfolio()}
         {tab === "transactions" && !readOnly && renderTransactions()}
         {tab === "analysis"    && renderAnalysis()}
@@ -4470,6 +4983,12 @@ const refreshGoldPrices = useCallback(async () => {
             : snapshots.at(-1)}
           taken={new Set(snapshots.map((s) => `${s.year}-${s.month}`))}
           onSave={saveSnapshotManual} onClose={() => setSnapModal(null)}/>
+      )}
+      {cfModal !== null && (
+        <CashflowModal month={cfModal?.id ? cfModal : null}
+          taken={new Set(cashflow.map((m) => monthId(m.year, m.month)))}
+          expenseBudget={settings.expenseBudget ?? 0}
+          onSave={saveCfMonth} onClose={() => setCfModal(null)}/>
       )}
       {shareModal && <ShareModal onClose={() => setShareModal(false)}/>}
     </div>

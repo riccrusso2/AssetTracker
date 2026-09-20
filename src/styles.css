@@ -534,6 +534,17 @@ html, body {
 .data-table tbody tr.row-closed:hover td { opacity: 1; }
 .note-mark { display: inline-flex; vertical-align: middle; margin-left: 6px; color: var(--text-muted); cursor: help; }
 
+/* =================== FONDO DI SICUREZZA =================== */
+/* Barra di copertura: il numero dice quanto manca, la barra quanto manca
+   *rispetto al bersaglio*, che è la cosa che si legge con un colpo d'occhio. */
+.ef-bar {
+  height: 10px; border-radius: 999px; overflow: hidden;
+  background: var(--bg-card2); border: 1px solid var(--border);
+}
+.ef-fill { height: 100%; border-radius: 999px; transition: width 0.3s ease; }
+.ef-fill.ef-ok  { background: var(--green); }
+.ef-fill.ef-low { background: var(--amber); }
+
 /* =================== SUMMARY STRIP =================== */
 .summary-strip {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1px;

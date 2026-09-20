@@ -30,7 +30,7 @@ docker compose up --build --remove-orphans
 MIGRATE_USER_ID=<uuid> node scripts/migrate.js
 ```
 
-The pure, unit-tested core is four modules — [rebalance.js](src/rebalance.js), [transactions.js](src/transactions.js), [metrics.js](src/metrics.js), [tax.js](src/tax.js) — each with a sibling `*.test.js`. **Put new financial logic in one of them, never inside `App.js`**: `App.js` is untestable in practice, and a wrong number there looks exactly like a right one.
+The pure, unit-tested core is five modules — [rebalance.js](src/rebalance.js), [transactions.js](src/transactions.js), [metrics.js](src/metrics.js), [tax.js](src/tax.js), [cashflow.js](src/cashflow.js) — each with a sibling `*.test.js`. **Put new financial logic in one of them, never inside `App.js`**: `App.js` is untestable in practice, and a wrong number there looks exactly like a right one.
 
 ## Architecture
 
@@ -53,11 +53,11 @@ Server is the source of truth; localStorage is a fallback cache only (`useLS` na
 - All writes go through a **1.5s debounced auto-save** effect to `POST /api/config` (see around [App.js:1233](src/App.js#L1233)); there is no manual save button. `configLoaded` gates it so the initial load doesn't immediately echo back.
 - All client→server calls go through `apiFetch` ([src/api.js](src/api.js)), which prefixes `REACT_APP_API_URL` and attaches the Supabase access token.
 
-Config is stored as **one JSONB blob per user** (`portfolios.data`: `{ version, totalCash, assets[], startups[], assetClasses[], goldEtf, physGold, settings, transactions[] }`, `version: 4`), snapshots as one row per month with `unique (user_id, year, month)` driving the upsert. `toClientSnap` maps snake_case rows back to the client's camelCase shape — the wire contract has been kept identical to the pre-Supabase file format.
+Config is stored as **one JSONB blob per user** (`portfolios.data`: `{ version, totalCash, assets[], startups[], assetClasses[], goldEtf, physGold, settings, transactions[], cashflow[] }`, `version: 5`), snapshots as one row per month with `unique (user_id, year, month)` driving the upsert. `toClientSnap` maps snake_case rows back to the client's camelCase shape — the wire contract has been kept identical to the pre-Supabase file format.
 
 ### Read-only sharing
 
-`portfolios.share_token` (random 24-byte base64url) + `share_enabled` back a public link at `/p/<token>`. `GET /api/public/:token` is the **only** unauthenticated data route: it validates the token against `TOKEN_RE` *before* querying (an empty/malformed token must never match rows whose `share_token` is null), requires `share_enabled`, and returns `{ config, snapshots }` with `user_id` never leaving the server and **`transactions` stripped by `publicConfig`** (the movement log says when and at what price you bought — far more than sharing a portfolio implies; strip it server-side, never only in the UI). Owner-side `GET/POST/DELETE /api/share` stay behind `requireAuth`; `DELETE` flips `share_enabled` without dropping the token, so revoke/re-enable reuses the same link.
+`portfolios.share_token` (random 24-byte base64url) + `share_enabled` back a public link at `/p/<token>`. `GET /api/public/:token` is the **only** unauthenticated data route: it validates the token against `TOKEN_RE` *before* querying (an empty/malformed token must never match rows whose `share_token` is null), requires `share_enabled`, and returns `{ config, snapshots }` with `user_id` never leaving the server and **`transactions` and `cashflow` stripped by `publicConfig`** (the movement log says when and at what price you bought, the monthly budget says what you earn — far more than sharing a portfolio implies; strip them server-side, never only in the UI). Owner-side `GET/POST/DELETE /api/share` stay behind `requireAuth`; `DELETE` flips `share_enabled` without dropping the token, so revoke/re-enable reuses the same link.
 
 On the client, `AuthGate` matches the `/p/<token>` pathname *before* the session logic and mounts `App` with `shareToken`, which sets `readOnly`: config+snapshots come from the public endpoint, the debounced auto-save and the price-refresh interval bail out, the Impostazioni tab is filtered out and every mutating control is hidden. Frontend gating is cosmetic — the API is the actual boundary. Run both checks with `npm run test:share` (real server, both modes) and `npm test` (`src/App.share.test.js` covers the DOM).
 
@@ -80,6 +80,14 @@ Optional and per-asset: `holdingFor(asset, txs)` returns the position derived fr
 #### [src/metrics.js](src/metrics.js) — return and risk
 
 Volatility, Sharpe and Sortino return `null` below 12 monthly observations and are flagged as indicative below 24 (`riskQuality`): a ratio built on five months describes which months landed in the sample, not the portfolio. `buildHistory` keys positions on `snapKey`, so deleting and re-adding an asset does not read as an external cash flow. `benchmarkSeries` compares the portfolio's return index against an asset already tracked in the snapshots — there is no historical price feed, and an asset held at quantity 0 works as a pure price tracker.
+
+#### [src/cashflow.js](src/cashflow.js) — the monthly budget
+
+Income and expenses are hand-entered, one record per `(year, month)` in `config.cashflow`. **What was invested is never entered**: `investedByMonth` derives it from the transaction register (buys gross+fee, minus sell proceeds, dividends excluded — they are produced by the portfolio, not paid into it). A second field would be a second source of truth for the same number, and the two would diverge on the first distracted month.
+
+Rates are measured on *total* income (salary + extra), and aggregate rates are recomputed from the totals, never averaged from the monthly percentages — otherwise the 13th-salary month weighs the same as an ordinary one. Income of zero yields `null`, not `0`: a rate on a zero denominator is missing data, and showing 0% asserts something false.
+
+`emergencyFund` sizes the reserve on the mean expense of the last `EF_WINDOW` months *that have expenses recorded* (a blank month is not a cheap month), and `investableThisMonth` subtracts the shortfall **before** anything is invested — liquidating the reserve during an emergency means selling at the worst possible moment. The result feeds the rebalancing budget (Bilancio tab → "Usa come budget", or the button next to the budget field in Ribilanciamento), which is the bridge between the salary and the portfolio.
 
 #### [src/tax.js](src/tax.js) — Italian tax
 

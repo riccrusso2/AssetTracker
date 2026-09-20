@@ -270,11 +270,12 @@ app.delete("/api/share", requireAuth, async (req, res) => {
 // malformato non può mai matchare righe con share_token null.
 // Il registro movimenti non esce mai dal link pubblico: dice quando e a quanto
 // si è comprato e venduto, cioè molto più di quanto si intende condividere
-// mostrando il portafoglio. Si toglie qui, non nel frontend, perché il confine
-// è l'API.
+// mostrando il portafoglio. Lo stesso vale, a maggior ragione, per il bilancio
+// mensile: stipendio e spese non c'entrano nulla con un portafoglio condiviso.
+// Si toglie qui, non nel frontend, perché il confine è l'API.
 const publicConfig = (cfg) => {
   if (!cfg || typeof cfg !== "object") return cfg ?? null;
-  const { transactions, ...rest } = cfg;
+  const { transactions, cashflow, ...rest } = cfg;
   return rest;
 };
 

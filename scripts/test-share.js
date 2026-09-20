@@ -34,9 +34,10 @@ const check = (name, fn) => {
 function makeStub() {
   const db = {
     portfolios: [
-      { user_id: USER_A, data: { version: 4, totalCash: 1000, assets: [{ id: "x", name: "ETF A" }],
+      { user_id: USER_A, data: { version: 5, totalCash: 1000, assets: [{ id: "x", name: "ETF A" }],
           transactions: [{ id: "t1", date: "2026-01-10", assetKey: "etf-a", type: "buy",
-                           quantity: 10, price: 100, fee: 5 }] },
+                           quantity: 10, price: 100, fee: 5 }],
+          cashflow: [{ id: "c1", year: 2026, month: 1, salary: 2345, extra: 0, expenses: 1200 }] },
         share_token: null, share_enabled: false },
       { user_id: USER_B, data: { version: 3, totalCash: 7, assets: [{ id: "y", name: "ETF B" }] },
         share_token: null, share_enabled: false },
@@ -196,9 +197,16 @@ async function runSupabase(port) {
     assert.strictEqual(pub.body.config.assets.length, 1);
   });
 
-  check("togliere i movimenti dalla risposta non li cancella dal database", () => {
+  check("il bilancio mensile non esce dal link pubblico", () => {
+    assert.ok(!("cashflow" in pub.body.config), "cashflow presente nella risposta");
+    // Lo stipendio è il dato più sensibile del blob: si cerca anche il valore.
+    assert.ok(!JSON.stringify(pub.body).includes("2345"), "stipendio trapelato");
+  });
+
+  check("togliere movimenti e bilancio dalla risposta non li cancella dal database", () => {
     const row = stub.__db.portfolios.find((r) => r.user_id === USER_A);
     assert.strictEqual(row.data.transactions.length, 1);
+    assert.strictEqual(row.data.cashflow.length, 1);
   });
 
   check("gli snapshot condivisi sono solo quelli del proprietario", () => {

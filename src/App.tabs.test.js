@@ -14,7 +14,7 @@ jest.mock("./api");
 jest.mock("./supabaseClient", () => ({ supabase: null }));
 
 const CONFIG = {
-  version: 4,
+  version: 5,
   totalCash: 3000,
   assets: [
     { id: "a1", name: "Globale", identifier: "IE00B4L5Y983", quantity: 0, costBasis: 0,
@@ -33,6 +33,13 @@ const CONFIG = {
     { id: "t2", date: "2026-03-10", assetKey: "globale", type: "buy", quantity: 5, price: 110, fee: 5 },
     { id: "t3", date: "2026-05-10", assetKey: "globale", type: "sell", quantity: 3, price: 90, fee: 5 },
     { id: "t4", date: "2026-04-01", assetKey: "globale", type: "dividend", amount: 40, fee: 4 },
+  ],
+  // Due mesi identici: 2.000 di entrate, 1.200 di spese → 800 risparmiati, 40%.
+  // Spesa media 1.200 × 3 mesi = 3.600 di fondo contro 3.000 di liquidità:
+  // mancano 600, quindi l'investibile del mese è 800 − 600 = 200.
+  cashflow: [
+    { id: "c1", year: 2026, month: 1, salary: 2000, extra: 0, expenses: 1200 },
+    { id: "c2", year: 2026, month: 2, salary: 2000, extra: 0, expenses: 1200 },
   ],
 };
 
@@ -69,7 +76,7 @@ test("ogni tab si monta senza errori con un portafoglio completo", async () => {
   render(<App />);
   await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/api/config"));
 
-  for (const tab of ["Portafoglio", "Movimenti", "Analisi", "Proiezione", "Ribilanciamento", "Impostazioni"]) {
+  for (const tab of ["Bilancio", "Portafoglio", "Movimenti", "Analisi", "Proiezione", "Ribilanciamento", "Impostazioni"]) {
     await openTab(tab);
     expect(document.querySelector(".tab-content")).toBeInTheDocument();
   }
@@ -265,4 +272,65 @@ test("la concentrazione nomina la posizione che pesa di più", async () => {
   // Globale: 12 quote da 120 = 1440; Bitcoin 1×500. Patrimonio = 1440+500+3000.
   expect(screen.getByText(/da sola vale il/i)).toHaveTextContent("Globale");
   window.location.hash = "";
+});
+
+// ====================== bilancio mensile ======================
+
+test("Bilancio calcola risparmio e tasso, e prende il versato dai movimenti", async () => {
+  window.location.hash = "";
+  render(<App session={{ user: { id: "u1", email: "a@b.c" } }} />);
+  await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/api/config"));
+  await openTab("Bilancio");
+
+  const riga = (await screen.findByText(/^Gen 2026$/)).closest("tr");
+  // jsdom formatta gli euro senza separatore di migliaia: si confronta il numero.
+  const euro = (i) => parseFloat(
+    riga.querySelectorAll("td")[i].textContent.replace(/[^\d,-]/g, "").replace(",", "."));
+  expect(euro(3)).toBe(1200);                 // spese
+  expect(euro(4)).toBe(800);                  // risparmio
+  expect(riga.querySelectorAll("td")[5].textContent).toBe("40%");
+  // Versato di gennaio: 10 × 100 + 5 di commissione, dal registro movimenti.
+  expect(euro(6)).toBe(1005);
+});
+
+test("il fondo di sicurezza è dimensionato sulla spesa media e dice quanto manca", async () => {
+  window.location.hash = "";
+  render(<App session={{ user: { id: "u1", email: "a@b.c" } }} />);
+  await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/api/config"));
+  await openTab("Bilancio");
+
+  expect(await screen.findByText(/Fondo di sicurezza/i)).toBeInTheDocument();
+  // 1.200 di spesa media × 3 mesi = 3.600, contro 3.000 di liquidità.
+  expect(screen.getByText(/Mancano/)).toHaveTextContent(/600,00/);
+});
+
+// Il ponte fra finanza personale e portafoglio: il budget del ribilanciamento
+// smette di essere un numero inventato nelle impostazioni.
+test("il budget del ribilanciamento si prende dall'investibile del mese", async () => {
+  window.location.hash = "";
+  render(<App session={{ user: { id: "u1", email: "a@b.c" } }} />);
+  await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/api/config"));
+  await openTab("Ribilanciamento");
+
+  const btn = await screen.findByRole("button", { name: /Usa l'investibile del mese/i });
+  expect(btn).toHaveTextContent(/200,00/);    // 800 di risparmio − 600 al fondo
+  await userEvent.click(btn);
+
+  const input = document.querySelector('input[type="number"]');
+  expect(input).toHaveValue(200);
+}, 20000);
+
+test("la vista condivisa non mostra la tab Bilancio", async () => {
+  window.location.hash = "";
+  apiFetch.mockImplementation((path) => {
+    if (path.startsWith("/api/public/")) {
+      const { transactions, cashflow, ...safe } = CONFIG;   // come fa il server
+      return ok({ config: safe, snapshots: SNAPSHOTS });
+    }
+    return ok({});
+  });
+  render(<App shareToken={"T".repeat(32)} />);
+  await waitFor(() => expect(apiFetch).toHaveBeenCalled());
+
+  expect(screen.queryByRole("button", { name: /Bilancio/i })).not.toBeInTheDocument();
 });

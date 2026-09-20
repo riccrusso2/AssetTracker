@@ -18,11 +18,19 @@ export const OBS_RELIABLE  = 24;   // sotto: da leggere come indicazione
 // Ogni rendimento porta con sé l'indice dello snapshot di arrivo: i mesi con
 // valore precedente a zero vengono saltati, e senza l'indice le serie per i
 // grafici si disallineerebbero dalle etichette di un mese, in silenzio.
+// Il flusso si pesa a metà periodo (Dietz modificato) invece che tutto alla
+// fine: non si sa in che giorno del mese è stato versato, e metà mese è la
+// stima non distorta. Col denominatore al solo valore iniziale il rendimento
+// dei mesi con versamento risultava sistematicamente più alto del reale — su
+// 10.000 con 1.000 versati a metà mese e l'1% di mercato usciva 1,05%.
 export const returnsIndexed = (history) => {
   const r = [];
   for (let i = 1; i < history.length; i++) {
     if (history[i - 1].v <= 0) continue;
-    r.push({ i, r: (history[i].v - (history[i].cf || 0) - history[i - 1].v) / history[i - 1].v });
+    const cf   = history[i].cf || 0;
+    const base = history[i - 1].v + cf / 2;
+    if (base <= 0) continue;             // prelievo che svuota il periodo
+    r.push({ i, r: (history[i].v - cf - history[i - 1].v) / base });
   }
   return r;
 };
@@ -44,7 +52,10 @@ export const calcVolatility = (history) => {
   const r = calcReturns(history);
   if (r.length < MIN_OBS_RATIO) return null;
   const mean = r.reduce((a, b) => a + b, 0) / r.length;
-  const variance = r.reduce((a, b) => a + (b - mean) ** 2, 0) / r.length;
+  // Varianza campionaria (n−1): i rendimenti sono un campione, non la
+  // popolazione. Con le 12–24 osservazioni tipiche qui la differenza vale un
+  // 2–4% di volatilità, che finisce dritto dentro Sharpe.
+  const variance = r.reduce((a, b) => a + (b - mean) ** 2, 0) / (r.length - 1);
   return Math.sqrt(variance * 12);
 };
 
@@ -70,15 +81,30 @@ export const calcSharpe = (history, rf = 0.03) => {
   return (cagr - rf) / vol;
 };
 
+// Stesso numeratore di Sharpe (il CAGR), denominatore diverso: al posto della
+// volatilità totale la sola semideviazione negativa.
+//
+// Due correzioni rispetto alla prima versione, entrambe necessarie perché i due
+// indicatori stanno affiancati nella stessa scheda:
+//  - la semideviazione si divide per TUTTE le osservazioni, non per le sole
+//    negative: i mesi positivi contano come deviazione zero, non escono dal
+//    campione. Su 24 mesi con 2 negativi il divisore sbagliato gonfiava la
+//    semideviazione di 3,5 volte — e con numeratore negativo faceva sembrare
+//    il Sortino migliore, quindi non era nemmeno un errore in una sola
+//    direzione.
+//  - il numeratore era la media aritmetica annualizzata mentre Sharpe usa il
+//    CAGR: Sortino risultava sistematicamente più alto per un motivo che non
+//    c'entrava col rischio di downside.
 export const calcSortino = (history, rf = 0.03) => {
   const r = calcReturns(history);
   if (r.length < MIN_OBS_RATIO) return null;
-  const meanAnn = (r.reduce((a, b) => a + b, 0) / r.length) * 12;
+  const cagr = calcCAGR(history);
+  if (cagr == null) return null;
   const neg = r.filter((x) => x < 0);
   if (!neg.length) return null;
-  const downDev = Math.sqrt((neg.reduce((a, b) => a + b ** 2, 0) / neg.length) * 12);
+  const downDev = Math.sqrt((neg.reduce((a, b) => a + b ** 2, 0) / r.length) * 12);
   if (downDev === 0) return null;
-  return (meanAnn - rf) / downDev;
+  return (cagr - rf) / downDev;
 };
 
 // Quanto ci si può fidare, dato il numero di osservazioni disponibili.
@@ -259,6 +285,10 @@ export const allocationOverTime = (snapshots) => snapshots.map((s) => {
   const pct = (v) => (total > 0 ? r2((v / total) * 100) : 0);
   rows.forEach((a) => { row[snapKey(a)] = pct(a.value || 0); });
   const residual = r2(total - rows.reduce((acc, a) => acc + (a.value || 0), 0));
+  // Solo il residuo positivo, a differenza di buildHistory che usa il valore
+  // assoluto: qui è una fetta di un'area impilata, e un residuo negativo (righe
+  // che sommano a più del totale, cioè uno snapshot incoerente) disegnerebbe
+  // una fetta sotto lo zero invece di segnalare il problema.
   if (residual > 0.005) row[SYNTHETIC_RESIDUAL] = pct(residual);
   return row;
 });
@@ -311,7 +341,11 @@ export const projectionScenarios = ({
 }) => {
   const rates = {
     base: baseReturn / 100 / 12,
-    pessimistic: Math.max(baseReturn - 3, 0) / 100 / 12,
+    // Niente pavimento a zero: con un rendimento base del 2% lo scenario
+    // pessimistico veniva bloccato allo 0% e la banda diventava asimmetrica
+    // (0/2/5) proprio nei casi prudenti. Un decennio negativo è uno scenario
+    // legittimo; il capitale resta comunque bloccato a zero più sotto.
+    pessimistic: (baseReturn - 3) / 100 / 12,
     optimistic: (baseReturn + 3) / 100 / 12,
   };
   const months = Math.max(0, Math.round(years * 12));
@@ -338,6 +372,31 @@ export const projectionScenarios = ({
     }
   }
   return data;
+};
+
+// Quanto capitale è davvero uscito di tasca in una proiezione, e quanto ne resta
+// dentro alla fine. Sta qui e non in App.js perché è il contro-altare di
+// projectionScenarios: il guadagno previsto è la differenza fra le due, e
+// sbagliarla dà un numero col segno invertito senza che nulla lo segnali.
+//
+//  - `contributed`: capitale iniziale + versamenti effettivi. I versamenti si
+//    fermano quando parte il prelievo, cosa che il conto precedente
+//    (`start + monthly × 12 × years`) ignorava.
+//  - `netInvested`: contributed meno i prelievi, cioè il capitale netto a cui
+//    confrontare il valore finale.
+export const projectionCapital = ({
+  start = 0, monthly = 0, years = 0,
+  withdrawAfter = null, withdrawMonthly = 0,
+}) => {
+  const drawing      = withdrawAfter != null;
+  const contribYears = drawing ? Math.max(0, Math.min(withdrawAfter, years)) : years;
+  const drawYears    = drawing ? Math.max(0, years - withdrawAfter) : 0;
+  const contributed  = r2(start + monthly * 12 * contribYears);
+  return {
+    contributed,
+    withdrawn:   r2(withdrawMonthly * 12 * drawYears),
+    netInvested: r2(contributed - withdrawMonthly * 12 * drawYears),
+  };
 };
 
 // Anno in cui il capitale si esaurisce nella fase di prelievo, se accade.

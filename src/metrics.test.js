@@ -25,9 +25,14 @@ const grow = (n, rate) => {
 // ====================== rendimenti ======================
 
 test("i versamenti non contano come guadagno", () => {
-  // Da 1000 a 2000 mettendoci 900 di tasca: il rendimento è +10%, non +100%.
+  // Da 1000 a 2000 mettendoci 900 di tasca: il guadagno è 100, non 1000.
+  // Il denominatore è il capitale mediamente investito nel mese (Dietz
+  // modificato): 1000 + 900/2 = 1450, perché i 900 non hanno lavorato per
+  // tutto il mese. 100/1450 = 6,9%; col solo valore iniziale sarebbe 10%,
+  // cioè il rendimento che si sarebbe avuto versando l'ultimo giorno.
   const r = calcReturns([{ t: "2026-01-01", v: 1000, cf: 0 }, { t: "2026-02-01", v: 2000, cf: 900 }]);
-  expect(r).toEqual([0.1]);
+  expect(r).toHaveLength(1);
+  expect(r[0]).toBeCloseTo(100 / 1450, 10);
 });
 
 test("un mese partito da valore zero viene saltato invece di dividere per zero", () => {
@@ -204,7 +209,7 @@ test("benchmark: un mese in cui il riferimento manca resta un buco, non uno zero
 });
 
 // ====================== proiezione ======================
-import { projectionScenarios, depletionYear } from "./metrics";
+import { projectionScenarios, projectionCapital, depletionYear } from "./metrics";
 
 test("proiezione: senza rendimento il capitale cresce solo dei versamenti", () => {
   const d = projectionScenarios({ start: 1000, monthly: 100, baseReturn: 0, years: 1 });
@@ -396,13 +401,15 @@ describe("sliceSnapshots / periodReturn", () => {
   });
 
   test("il rendimento di periodo compone i mesi al netto dei versamenti", () => {
-    // +10%, poi +10% con 100 di versamento: composto = 21%.
+    // +10% netto, poi 110 di guadagno su 1.100 con 100 versati a metà mese:
+    // 110/1.150 = 9,57%. Composto: 1,10 × 1,0957 − 1 = 20,52%. Non 21%: quel
+    // numero presuppone che i 100 siano entrati l'ultimo giorno del mese.
     const s = [
       snap("M0", 2026, 1, 1000, [pos("etf", 100, 10)]),
       snap("M1", 2026, 2, 1100, [pos("etf", 110, 10)]),
       snap("M2", 2026, 3, 1310, [pos("etf", 121, 10), ...syntheticRows({ totalCash: 100 })]),
     ];
-    expect(periodReturn(s)).toBeCloseTo(0.21, 6);
+    expect(periodReturn(s)).toBeCloseTo(1.1 * (1 + 110 / 1150) - 1, 10);
   });
 });
 
@@ -457,5 +464,75 @@ describe("growthAttribution", () => {
     expect(row.contrib).toBe(0);
     expect(row.market).toBe(0);
     expect(periodReturn(snaps)).toBe(0);
+  });
+});
+
+
+// ====================== regressioni sulle metriche di rischio ======================
+
+test("Sortino: la semideviazione si divide per tutte le osservazioni, non per le sole negative", () => {
+  // 24 mesi, 22 a +1% e 2 a −10%. Dividendo per i 2 mesi negativi la
+  // semideviazione usciva 0,3464 invece di 0,1000: 3,5 volte troppo grande, e
+  // con numeratore negativo faceva sembrare il Sortino migliore del vero.
+  const r = [...Array(24)].map((_, i) => (i === 5 || i === 17 ? -0.10 : 0.01));
+  let v = 100000;
+  const hist = [{ t: "2024-01-01", v, cf: 0 }];
+  r.forEach((x, i) => {
+    v *= 1 + x;
+    const mese = (i + 1) % 12 + 1, anno = 2024 + Math.floor((i + 1) / 12);
+    hist.push({ t: `${anno}-${String(mese).padStart(2, "0")}-01`, v, cf: 0 });
+  });
+
+  const neg     = r.filter((x) => x < 0);
+  const downDev = Math.sqrt((neg.reduce((a, b) => a + b ** 2, 0) / r.length) * 12);
+  expect(downDev).toBeCloseTo(0.1, 6);
+  expect(calcSortino(hist, 0.03)).toBeCloseTo((calcCAGR(hist) - 0.03) / downDev, 10);
+
+  // Stesso numeratore di Sharpe: cambia solo il denominatore.
+  const k = calcSharpe(hist, 0.03) / calcSortino(hist, 0.03);
+  expect(k).toBeCloseTo(downDev / calcVolatility(hist), 10);
+});
+
+test("proiezione: lo scenario pessimistico può essere negativo, non viene azzerato", () => {
+  // Con base 2% il pavimento a zero rendeva la banda asimmetrica (0/2/5).
+  const d = projectionScenarios({ start: 1000, monthly: 0, baseReturn: 2, years: 1 });
+  expect(d.at(-1).pessimistic).toBeLessThan(1000);
+  // La serie è arrotondata al centesimo, quindi il confronto è al centesimo.
+  expect(d.at(-1).pessimistic).toBeCloseTo(1000 * Math.pow(1 - 0.01 / 12, 12), 2);
+});
+
+describe("projectionCapital", () => {
+  test("senza prelievi è capitale iniziale più versamenti", () => {
+    const c = projectionCapital({ start: 100000, monthly: 500, years: 10 });
+    expect(c.contributed).toBe(160000);
+    expect(c.withdrawn).toBe(0);
+    expect(c.netInvested).toBe(160000);
+  });
+
+  test("coi prelievi i versamenti si fermano e i prelievi escono", () => {
+    // Regressione: il guadagno previsto si misurava su 10 anni di versamenti
+    // anche quando dal quinto si passava a prelevare, e usciva negativo su una
+    // proiezione ampiamente in guadagno.
+    const c = projectionCapital({
+      start: 100000, monthly: 500, years: 10,
+      withdrawAfter: 5, withdrawMonthly: 1500,
+    });
+    expect(c.contributed).toBe(130000);   // 100.000 + 500 × 12 × 5
+    expect(c.withdrawn).toBe(90000);      // 1.500 × 12 × 5
+    expect(c.netInvested).toBe(40000);
+
+    const finale = projectionScenarios({
+      start: 100000, monthly: 500, baseReturn: 7, years: 10,
+      withdrawAfter: 5, withdrawMonthly: 1500,
+    }).at(-1).base;
+    expect(finale - c.netInvested).toBeGreaterThan(0);
+  });
+
+  test("prelievo che parte oltre l'orizzonte: nessun prelievo conteggiato", () => {
+    const c = projectionCapital({
+      start: 1000, monthly: 100, years: 5, withdrawAfter: 8, withdrawMonthly: 500,
+    });
+    expect(c.contributed).toBe(7000);
+    expect(c.withdrawn).toBe(0);
   });
 });

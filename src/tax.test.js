@@ -75,7 +75,7 @@ test("una minusvalenza su ETF non compensa una plusvalenza su ETF", () => {
     buy("2026-01-10", 10, 200, 0, "etf-b"), sell("2026-06-10", 10, 100, 0, "etf-b"),  // −1000
   ];
   const meta = { "etf-a": { assetClass: "ETF" }, "etf-b": { assetClass: "ETF" } };
-  const rep = taxReport(txs, meta);
+  const rep = taxReport(txs, meta, DEFAULT_TAX, 2026);
 
   expect(rep.years[0].capitalGains).toBe(1000);
   expect(rep.years[0].taxable).toBe(1000);
@@ -103,7 +103,7 @@ test("la minusvalenza di un anno compensa la plusvalenza di un anno successivo",
     buy("2024-01-10", 10, 200, 0, "az"), sell("2024-06-10", 10, 100, 0, "az"),   // −1000 nel 2024
     buy("2026-01-10", 10, 100, 0, "az"), sell("2026-06-10", 10, 180, 0, "az"),   // +800 nel 2026
   ];
-  const rep = taxReport(txs, { az: { assetClass: "Azione" } });
+  const rep = taxReport(txs, { az: { assetClass: "Azione" } }, DEFAULT_TAX, 2026);
   expect(rep.years.map((y) => y.year)).toEqual([2024, 2026]);
   expect(rep.years[1].offset).toBe(800);
   expect(rep.years[1].taxable).toBe(0);
@@ -137,7 +137,7 @@ test("si consuma per prima la minusvalenza più vecchia, che è quella che scade
     buy("2024-01-10", 10, 200, 0, "az"), sell("2024-06-10", 10, 150, 0, "az"),   // −500 (2024)
     buy("2026-01-10", 10, 100, 0, "az"), sell("2026-06-10", 10, 150, 0, "az"),   // +500 (2026)
   ];
-  const rep = taxReport(txs, { az: { assetClass: "Azione" } });
+  const rep = taxReport(txs, { az: { assetClass: "Azione" } }, DEFAULT_TAX, 2026);
   expect(rep.pool).toEqual([{ year: 2024, amount: 500, expiresAfter: 2028 }]);
 });
 
@@ -146,8 +146,32 @@ test("expiring dice quanto scade se non si realizza nulla", () => {
     buy("2022-01-10", 10, 200, 0, "az"), sell("2022-06-10", 10, 100, 0, "az"),   // −1000 (2022)
     buy("2026-01-10", 10, 100, 0, "az"), sell("2026-06-10", 10, 100, 0, "az"),   // 0, apre il 2026
   ];
-  const rep = taxReport(txs, { az: { assetClass: "Azione" } });
+  const rep = taxReport(txs, { az: { assetClass: "Azione" } }, DEFAULT_TAX, 2026);
   expect(rep.expiring).toBe(1000);           // il 2022 scade dopo il 2026
+  expect(rep.expired).toBe(0);
+});
+
+test("le scadenze seguono il calendario, non l'ultimo anno con vendite", () => {
+  // Registro fermo al 2021, minusvalenza del 2020 mai compensata. Nel 2026 è
+  // persa da due anni: prima restava nello zainetto come credito disponibile,
+  // perché il pool veniva ripulito solo negli anni con movimenti.
+  const txs = [
+    buy("2019-01-10", 10, 100, 0, "az"), sell("2020-06-10", 10, 50, 0, "az"),    // −500 (2020)
+    buy("2021-01-10", 10, 50, 0, "az"),  sell("2021-06-10", 10, 55, 0, "az"),    // +50 (2021)
+  ];
+  const meta = { az: { assetClass: "Azione" } };
+
+  const nel2023 = taxReport(txs, meta, DEFAULT_TAX, 2023);
+  expect(nel2023.pool).toEqual([{ year: 2020, amount: 450, expiresAfter: 2024 }]);
+  expect(nel2023.expired).toBe(0);
+
+  const nel2024 = taxReport(txs, meta, DEFAULT_TAX, 2024);
+  expect(nel2024.expiring).toBe(450);        // ultimo anno per usarla
+
+  const nel2026 = taxReport(txs, meta, DEFAULT_TAX, 2026);
+  expect(nel2026.pool).toEqual([]);
+  expect(nel2026.expiring).toBe(0);
+  expect(nel2026.expired).toBe(450);
 });
 
 // ====================== bollo e imposta latente ======================

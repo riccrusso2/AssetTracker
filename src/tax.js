@@ -74,13 +74,22 @@ export const realizedLots = (txs) => {
 
 // Conto fiscale anno per anno, con lo zainetto delle minusvalenze che scorre.
 // assetByKey serve solo a sapere la categoria di ogni strumento.
-export const taxReport = (txs, assetByKey = {}, tax = DEFAULT_TAX) => {
+//
+// `currentYear` è l'anno rispetto a cui si misurano le scadenze. Prima si usava
+// l'ultimo anno con vendite: una minusvalenza del 2020 in un registro fermo al
+// 2021 risultava ancora spendibile nel 2026, perché il pool veniva ripulito solo
+// all'inizio di un anno con movimenti. Lo zainetto scade col calendario, non con
+// l'ultimo ordine eseguito.
+export const taxReport = (txs, assetByKey = {}, tax = DEFAULT_TAX,
+                          currentYear = new Date().getFullYear()) => {
   const sales = realizedLots(txs).map((s) => ({
     ...s,
     category: taxCategory(assetByKey[s.assetKey]),
     rate: taxRateFor(assetByKey[s.assetKey], tax),
   }));
-  if (!sales.length) return { years: [], pool: [], expiring: 0, totalTax: 0, totalNet: 0 };
+  if (!sales.length) {
+    return { years: [], pool: [], expiring: 0, expired: 0, totalTax: 0, totalNet: 0 };
+  }
 
   const years = [...new Set(sales.map((s) => s.year))].sort((a, b) => a - b);
   let pool = [];        // { year, amount } minusvalenze ancora spendibili
@@ -141,13 +150,21 @@ export const taxReport = (txs, assetByKey = {}, tax = DEFAULT_TAX) => {
     });
   }
 
-  const lastYear = years.at(-1);
+  // Ultima ripulitura rispetto all'anno di calendario: gli anni senza vendite non
+  // passano dal ciclo sopra, quindi senza questo passaggio le minusvalenze morte
+  // resterebbero a schermo come credito disponibile.
+  const alive   = pool.filter((l) => currentYear - l.year <= tax.lossYears);
+  const expired = r2(pool.filter((l) => currentYear - l.year > tax.lossYears)
+                         .reduce((a, l) => a + l.amount, 0));
   return {
     years: rows,
-    pool: pool.map((l) => ({ ...l, expiresAfter: l.year + tax.lossYears })),
+    pool: alive.map((l) => ({ ...l, expiresAfter: l.year + tax.lossYears })),
     // Quanto si perde se entro fine anno non si realizza una plusvalenza
     // compensabile: l'unica informazione di questo modulo su cui si può agire.
-    expiring: r2(pool.filter((l) => l.year + tax.lossYears <= lastYear).reduce((a, l) => a + l.amount, 0)),
+    expiring: r2(alive.filter((l) => l.year + tax.lossYears === currentYear)
+                      .reduce((a, l) => a + l.amount, 0)),
+    // Già perse: non c'è più nulla da fare, ma sparire in silenzio sarebbe peggio.
+    expired,
     totalTax: r2(rows.reduce((a, y) => a + y.tax, 0)),
     totalNet: r2(rows.reduce((a, y) => a + y.net, 0)),
   };

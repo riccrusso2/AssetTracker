@@ -32,13 +32,13 @@ test("oro col target sul sotto-portafoglio ETF: 90/10 indipendente dalla liquidi
   const byId = Object.fromEntries(etfRebalance.actions.map((a) => [a.id, a]));
   expect(byId.g.tgtW).toBeCloseTo(10, 6);   // target sui soli ETF, non sul patrimonio
   expect(byId.g.curW).toBeCloseTo(5.26, 2);
-  // L'oro è sottopesato: prima copre il gap (450), poi il resto va pro-quota.
-  expect(byId.g.monthlyBuy).toBe(505);
-  expect(byId.w.monthlyBuy).toBe(495);
+  // Il fabbisogno si misura sul portafoglio POST budget (10.500): oro 550,
+  // globale 450. Sommano al budget, quindi entrambi arrivano esatti al target.
+  expect(byId.g.monthlyBuy).toBe(550);
+  expect(byId.w.monthlyBuy).toBe(450);
   expect(r2(byId.g.monthlyBuy + byId.w.monthlyBuy)).toBe(1_000);
-  // Dopo l'acquisto il peso dell'oro sale dal 5,3% al 9,6%, verso il 10%.
   const goldAfter = (500 + byId.g.monthlyBuy) / (9_500 + 1_000) * 100;
-  expect(goldAfter).toBeCloseTo(9.57, 2);
+  expect(goldAfter).toBeCloseTo(10, 6);
 });
 
 test("target 4% su patrimonio 100k → obiettivo 4.000€, non 4% degli ETF", () => {
@@ -216,17 +216,78 @@ test("abbonamento omesso: retrocompatibile col calcolo precedente", () => {
 });
 
 // ====================== bande di tolleranza ======================
-test("con la banda attiva un asset quasi a target non riceve nulla", () => {
-  // "a" è sotto di 1 punto, "b" di 10: con banda 5 tutto il budget va a "b".
+test("con la banda attiva chi è quasi a target passa per ultimo", () => {
+  // Sul totale post budget (9.900) "a" ha un fabbisogno di 50 (0,5 punti, dentro
+  // la banda) e "b" di 950 (9,6 punti, fuori): "b" viene servito per primo e si
+  // prende quasi tutto. Il residuo copre comunque "a", perché la banda è una
+  // priorità e non un'esclusione: escluderlo del tutto significava, con un
+  // budget grande, lasciare a zero un asset che il budget rendeva sottopesato.
   const assets = [
     { name: "a", targetWeight: 50, lastPrice: 100, quantity: 49 },   // 4.900 → 49%
     { name: "b", targetWeight: 50, lastPrice: 100, quantity: 40 },   // 4.000 → 40%
   ];
   const { actions } = calcRebalancing(assets, 8900, 1000, 5);
-  expect(actions[0].monthlyBuy).toBe(0);
-  expect(actions[1].monthlyBuy).toBe(1000);
+  expect(actions[0].monthlyBuy).toBe(50);
+  expect(actions[1].monthlyBuy).toBe(950);
   expect(actions[0].inBand).toBe(true);
   expect(actions[1].inBand).toBe(false);
+});
+
+test("un asset sopra target riceve comunque, se il budget lo rende sottopesato", () => {
+  // Regressione: la banda si misurava sul peso ATTUALE, quindi chi era sopra
+  // target restava escluso da ogni fase qualunque fosse il budget. Con banda 2
+  // e un budget di 1M il 60/40 finiva 5,6% / 94,4%.
+  const assets = [
+    { name: "a", targetWeight: 60, lastPrice: 100, quantity: 620 },  // 62.000 → 62%
+    { name: "b", targetWeight: 40, lastPrice: 100, quantity: 380 },  // 38.000 → 38%
+  ];
+  const { actions } = calcRebalancing(assets, 100_000, 1_000_000, 2);
+  const peso = (x) => (x.lastPrice * x.quantity + x.monthlyBuy) / 1_100_000 * 100;
+  expect(peso(actions[0])).toBeCloseTo(60, 6);
+  expect(peso(actions[1])).toBeCloseTo(40, 6);
+});
+
+test("livello 1: oro sopra target riceve quando il budget lo diluisce sotto", () => {
+  // Il caso che ha fatto emergere il bug: oro al 13% con target 10%. Fino a
+  // 30.000 di budget resta sopra target e non prende nulla; oltre, il PAC lo
+  // porterebbe sotto e deve comprare.
+  const items = () => [{ id: "g", name: "Oro", targetPct: 10, currentVal: 13_000, price: 200 }];
+  const etf = () => [{ id: "w", name: "W", targetWeight: 100, lastPrice: 100, quantity: 600 }];
+
+  const sotto = calcRebalancingTwoLevel(etf(), items(), 100_000, 60_000, 10_000);
+  expect(sotto.itemBuys[0].buy).toBe(0);          // 13.000 > 10% di 110.000
+
+  const sopra = calcRebalancingTwoLevel(etf(), items(), 100_000, 60_000, 100_000);
+  expect(sopra.itemBuys[0].buy).toBe(7_000);      // 10% di 200.000 = 20.000
+  expect((13_000 + sopra.itemBuys[0].buy) / 200_000 * 100).toBeCloseTo(10, 6);
+});
+
+test("asset senza prezzo non assorbe budget che non può essere speso", () => {
+  const assets = [
+    { name: "quotato",  targetWeight: 60, lastPrice: 100,  quantity: 10 },
+    { name: "no-prezzo", targetWeight: 40, lastPrice: null, quantity: 0 },
+  ];
+  const { actions } = calcRebalancing(assets, 1_000, 500);
+  expect(actions[0].monthlyBuy).toBe(500);
+  expect(actions[1].monthlyBuy).toBe(0);
+});
+
+test("portafoglio ancora vuoto: il budget si ripartisce ai pesi target", () => {
+  const assets = [
+    { name: "a", targetWeight: 60, lastPrice: 100, quantity: 0 },
+    { name: "b", targetWeight: 40, lastPrice: 50,  quantity: 0 },
+  ];
+  const { actions } = calcRebalancing(assets, 0, 1_000);
+  expect(actions.map((a) => a.monthlyBuy)).toEqual([600, 400]);
+});
+
+test("nessun target impostato: nessun acquisto, non tutto sul primo asset", () => {
+  const assets = [
+    { name: "a", targetWeight: 0, lastPrice: 100, quantity: 10 },
+    { name: "b", targetWeight: 0, lastPrice: 100, quantity: 10 },
+  ];
+  const { actions } = calcRebalancing(assets, 2_000, 1_000);
+  expect(actions.map((a) => a.monthlyBuy)).toEqual([0, 0]);
 });
 
 test("se nessuno esce dalla banda il budget si distribuisce ai pesi target, non resta fermo", () => {

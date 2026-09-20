@@ -19,62 +19,86 @@ export const snapKey = (a) =>
 export const isTotalTargetAsset = (a) =>
   a.targetOnTotal ?? (a.assetClass === "Crypto" || a.assetClass === "Oro");
 
-// Distribuzione buy-only del budget tra gli asset ETF, proporzionale ai
-// target normalizzati, senza mai vendere.
+// Distribuzione buy-only del budget tra gli asset ETF, senza mai vendere.
+//
+// Il fabbisogno di ogni asset si misura sul patrimonio DOPO il budget
+// (`totalVal + budget`): è la base su cui il budget viene effettivamente speso.
+// Misurarlo sul totale attuale — com'era prima — significava che un asset appena
+// sopra target restava a zero anche quando il budget lo rendeva sottopesato: con
+// 100k di portafoglio, oro al 13% contro un target del 10% e un budget di 100k,
+// finiva al 6,5% senza ricevere un euro.
+//
 // `band`: scostamento in punti percentuali entro cui un asset si considera già
 // a posto. Serve a non inseguire il target ogni mese per mezzo punto — ogni
-// riequilibrio costa commissioni e, sui titoli, può realizzare imposte. Se
-// nessuno esce dalla banda il budget non resta fermo: si distribuisce ai pesi
-// target, che per un PAC è esattamente il comportamento voluto.
+// riequilibrio costa commissioni e, sui titoli, può realizzare imposte. È una
+// priorità, non un'esclusione: chi è fuori banda viene servito per primo, il
+// resto del budget copre comunque il fabbisogno di tutti gli altri. Se nessuno
+// ha più fabbisogno il surplus si distribuisce ai pesi target, che per un PAC è
+// esattamente il comportamento voluto.
 export const calcRebalancing = (assets, totalVal, budget, band = 0) => {
-  if (!totalVal || totalVal <= 0) return { actions: [] };
+  const newTotal = (totalVal || 0) + (budget || 0);
+  // Anche con un portafoglio ancora a zero il budget va allocato: è il primo
+  // mese d'uso, i target ci sono e la ripartizione ai pesi è già la risposta.
+  if (!(newTotal > 0)) return { actions: [] };
   const sumTarget = assets.reduce((acc, a) => acc + (a.targetWeight || 0), 0) || 1;
   const norm = 100 / sumTarget;
-  const actions = assets.map((a) => {
+  const rows = assets.map((a) => {
     const cur   = (a.lastPrice || 0) * (a.quantity || 0);
-    const curW  = (cur / totalVal) * 100;
     const tgtW  = (a.targetWeight || 0) * norm;
+    const need  = Math.max(0, (tgtW / 100) * newTotal - cur);
     const delta = (tgtW / 100) * totalVal - cur;
-    const qty   = a.lastPrice ? delta / a.lastPrice : 0;
-    return { ...a, curW, tgtW, delta, qty, inBand: tgtW - curW < band };
+    return {
+      ...a, tgtW, need, delta,
+      curW: totalVal > 0 ? (cur / totalVal) * 100 : 0,
+      qty:  a.lastPrice ? delta / a.lastPrice : 0,
+      // Senza prezzo l'asset risulterebbe a valore 0, quindi il più sottopesato
+      // di tutti: si prenderebbe il budget e applyRebalance lo scarterebbe,
+      // registrando acquisti per molto meno del budget mostrato a schermo.
+      buyable: (a.lastPrice || 0) > 0,
+      // La banda si misura sullo stesso scostamento che si sta per colmare,
+      // non sul peso attuale: altrimenti torna l'incoerenza di basi di sopra.
+      inBand: (need / newTotal) * 100 < band,
+    };
   });
-  const buy = new Array(actions.length).fill(0);
-  let eligible = actions.map((_, i) => i).filter((i) => actions[i].delta > 0 && !actions[i].inBand);
-  let remaining = budget;
-  for (let iter = 0; iter < 20 && eligible.length > 0 && remaining > 0.005; iter++) {
-    const sumEligTgt = eligible.reduce((acc, i) => acc + actions[i].tgtW, 0);
-    if (sumEligTgt <= 0) break;
-    const nextEligible = [];
-    let allocated = 0;
-    for (const i of eligible) {
-      const proportional = (actions[i].tgtW / sumEligTgt) * remaining;
-      const room         = actions[i].delta - buy[i];
-      if (proportional >= room) { buy[i] = actions[i].delta; allocated += room; }
-      else { buy[i] += proportional; allocated += proportional; nextEligible.push(i); }
+
+  const buy = new Array(rows.length).fill(0);
+  let remaining = budget || 0;
+  // Riempimento ad acqua: quota proporzionale al fabbisogno residuo, mai oltre
+  // il fabbisogno. Una passata basta — se il budget copre tutto ognuno prende
+  // il suo, altrimenti la quota è già una frazione del fabbisogno.
+  const fill = (idxs) => {
+    const pool = idxs.filter((i) => rows[i].buyable && rows[i].need - buy[i] > 0.005);
+    const sum  = pool.reduce((acc, i) => acc + (rows[i].need - buy[i]), 0);
+    if (sum <= 0 || remaining <= 0.005) return;
+    const k = Math.min(1, remaining / sum);
+    for (const i of pool) {
+      const add = (rows[i].need - buy[i]) * k;
+      buy[i] += add;
+      remaining -= add;
     }
-    remaining -= allocated;
-    eligible   = nextEligible;
-  }
+  };
+  fill(rows.map((_, i) => i).filter((i) => !rows[i].inBand));   // prima chi è fuori banda
+  fill(rows.map((_, i) => i));                                  // poi il fabbisogno residuo
   if (remaining > 0.005) {
-    // Con una banda attiva il budget avanzato va solo a chi ne è fuori:
-    // altrimenti la banda non servirebbe a nulla, si tornerebbe a comprare
-    // ogni mese anche ciò che è già a posto. Senza banda (band = 0) resta la
-    // distribuzione ai pesi target su tutti, che mantiene le proporzioni.
-    const outOfBand = actions.map((_, i) => i).filter((i) => !actions[i].inBand);
-    const idxs = band > 0 && outOfBand.length ? outOfBand : actions.map((_, i) => i);
-    const sumTgt = idxs.reduce((acc, i) => acc + actions[i].tgtW, 0);
-    if (sumTgt > 0) idxs.forEach((i) => { buy[i] += (actions[i].tgtW / sumTgt) * remaining; });
+    // Tutti al target: il surplus è denaro nuovo e va ai pesi target. Quando
+    // nessuno ha deriva il fabbisogno è già proporzionale al target, quindi le
+    // due ripartizioni coincidono e questo ramo serve solo oltre il target.
+    const idxs = rows.map((_, i) => i).filter((i) => rows[i].buyable);
+    const sumTgt = idxs.reduce((acc, i) => acc + rows[i].tgtW, 0);
+    if (sumTgt > 0) idxs.forEach((i) => { buy[i] += (rows[i].tgtW / sumTgt) * remaining; });
   }
-  // ponytail: il delta si misura sul totale attuale, non su totale + budget.
-  // Con la seconda base la somma dei delta coinciderebbe col budget e i pesi
-  // finirebbero esatti al primo colpo — è un miglioramento vero, ma cambia gli
-  // acquisti proposti a chiunque usi già la dashboard: da valutare a parte.
-  const rawBuys = actions.map((_, i) => Math.max(0, buy[i] || 0));
-  const rounded = rawBuys.map(r2);
-  const roundDiff = r2(budget - rounded.reduce((a, b) => a + b, 0));
-  if (Math.abs(roundDiff) > 0) { const maxIdx = rounded.indexOf(Math.max(...rounded)); rounded[maxIdx] = r2(rounded[maxIdx] + roundDiff); }
+
+  const rounded   = buy.map((b) => r2(Math.max(0, b || 0)));
+  const allocated = rounded.reduce((a, b) => a + b, 0);
+  const roundDiff = r2(budget - allocated);
+  // `allocated > 0` è la guardia: senza, con tutti i target a zero il resto di
+  // arrotondamento vale l'intero budget e finisce sul primo asset dell'array.
+  if (Math.abs(roundDiff) > 0 && allocated > 0) {
+    const maxIdx = rounded.indexOf(Math.max(...rounded));
+    rounded[maxIdx] = r2(rounded[maxIdx] + roundDiff);
+  }
   return {
-    actions: actions.map((a, i) => ({
+    actions: rows.map((a, i) => ({
       ...a, monthlyBuy: rounded[i],
       monthlyQty: a.lastPrice && rounded[i] > 0 ? r2(rounded[i] / a.lastPrice) : 0,
     })),
@@ -95,10 +119,15 @@ export const calcRebalancingTwoLevel = (etfAssets, items, grandTotal, etfTotalVa
   const newTotal = grandTotal + budget;
 
   const needs = items.map((it) => {
-    if (!(it.targetPct > 0 && it.price > 0)) return 0;
-    const curPct = grandTotal > 0 ? (it.currentVal / grandTotal) * 100 : 0;
-    if (it.targetPct - curPct < band) return 0;          // già dentro la banda
-    return Math.max(0, (it.targetPct / 100) * newTotal - it.currentVal);
+    if (!(it.targetPct > 0 && it.price > 0) || !(newTotal > 0)) return 0;
+    // Stesso criterio del livello 2: fabbisogno e banda sul patrimonio DOPO il
+    // budget. Con il peso attuale come base un asset sopra target non riceveva
+    // nulla nemmeno quando il budget lo rendeva sottopesato — e `gapPP/100 ×
+    // newTotal` è identicamente il fabbisogno, quindi le due misure non possono
+    // più divergere.
+    const gapPP = it.targetPct - (it.currentVal / newTotal) * 100;
+    if (gapPP < band) return 0;                          // già dentro la banda
+    return (gapPP / 100) * newTotal;
   });
   const totalNeed = needs.reduce((a, b) => a + b, 0);
   // Se il fabbisogno supera il budget, ripartizione proporzionale

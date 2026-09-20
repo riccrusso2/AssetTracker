@@ -29,7 +29,7 @@ import {
   calcCAGR, calcVolatility, calcMaxDrawdown, calcSharpe, calcSortino, calcReturns,
   riskQuality, buildHistory, drawdownSeries, allocationOverTime,
   contributionByAsset, monthlyReturnsGrid, benchmarkSeries, OBS_RELIABLE,
-  projectionScenarios, depletionYear, syntheticRows, isSynthetic, syntheticLabel,
+  projectionScenarios, projectionCapital, depletionYear, syntheticRows, isSynthetic, syntheticLabel,
   SYNTHETIC_RESIDUAL, PERIODS, sliceSnapshots, periodReturn, growthAttribution,
 } from "./metrics";
 import { taxReport, bolloTitoli, latentTax, DEFAULT_TAX } from "./tax";
@@ -144,10 +144,16 @@ const quotedRows = (snap) => (snap.assets || []).filter((a) => !isSynthetic(a));
 
 const buildChartData = (snapshots) => {
   if (!snapshots.length) return { data: [], assetIds: [], allIds: [] };
-  const base = snapshots[0];
-  const baseTotal = base.totalValue || 1;
+  const baseTotal = snapshots[0].totalValue || 1;
+  // Base di ogni serie = il primo prezzo in cui l'asset compare, non quello del
+  // primo snapshot. Prendendo solo snapshots[0] un asset entrato dopo cadeva sul
+  // fallback `a.price` del mese corrente, quindi valeva 100 in ogni punto: una
+  // linea piatta al posto della sua performance.
   const baseByAssetId = {};
-  quotedRows(base).forEach((a) => { baseByAssetId[snapKey(a)] = a.price || 1; });
+  snapshots.forEach((s) => quotedRows(s).forEach((a) => {
+    const k = snapKey(a);
+    if (baseByAssetId[k] == null && a.price) baseByAssetId[k] = a.price;
+  }));
   const assetIdSet = new Set(), allIdSet = new Set();
   snapshots.forEach((s) => {
     const rows = s.assets || [];
@@ -598,6 +604,12 @@ const StartupModal = ({ startup, onSave, onClose }) => {
           )}
           {form.status === "exit" && (
             <>
+              <p className="hint-text" style={{ marginTop: 0 }}>
+                Se l'incasso non è ancora arrivato in liquidità, conviene lasciarla
+                attiva con la valutazione pari all'importo dell'exit: così il
+                guadagno risulta rendimento e non un versamento. Passa a "Exit"
+                nel mese in cui aggiorni anche la liquidità.
+              </p>
               <label className="field-label">Importo incassato dall'exit (€) *
                 <input type="number" step="any" value={form.exitAmount ?? ""} onChange={(e) => set("exitAmount", e.target.value)} className="field-input"/>
               </label>
@@ -1476,6 +1488,15 @@ const refreshGoldPrices = useCallback(async () => {
   const etfTargetSum = useMemo(
     () => r2(etfPortfolioAssets.reduce((s, a) => s + (a.targetWeight || 0), 0)),
     [etfPortfolioAssets]);
+  // Il ribilanciamento normalizza i target a 100 (vedi calcRebalancing), quindi
+  // deriva e tabella devono confrontarsi con gli stessi numeri: con target 48/32
+  // che sommano a 80 e posizioni esattamente 60/40 il ribilanciatore vedeva un
+  // portafoglio a target e la deriva segnalava 12 punti di scostamento, nella
+  // stessa pagina.
+  const etfTargetNorm = useMemo(
+    () => (etfTargetSum > 0 ? 100 / etfTargetSum : 1), [etfTargetSum]);
+  const etfTargetOf = useCallback(
+    (a) => r2((a.targetWeight || 0) * etfTargetNorm), [etfTargetNorm]);
 
   const classDist = useMemo(() => calcClassDist(assets), [assets]);
   const goldEtfValue = useMemo(() =>
@@ -1512,7 +1533,20 @@ const refreshGoldPrices = useCallback(async () => {
     () => calcStartupPortfolio(startups, settings.startupSubscription ?? 0),
     [startups, settings.startupSubscription]);
 
-  const suTotal    = startupStats.activeVal;   // solo startup attive → patrimonio
+  // Solo le attive entrano nel patrimonio, alla valutazione dichiarata dove c'è
+  // (calcStartupMetrics ripiega sul capitale investito, quindi per chi non
+  // compila la valutazione il numero è identico a prima). Col costo fisso una
+  // rivalutazione non arrivava mai al patrimonio, e quando la posizione si
+  // chiudeva l'intero guadagno compariva di colpo come denaro versato.
+  //
+  // ponytail: resta scoperto il mese dell'incasso. La riga sintetica delle
+  // startup vale `Δquantità × prezzo` per buildHistory, quindi se una posizione
+  // esce dal book a un valore diverso da quello a cui era iscritta la differenza
+  // è indistinguibile da un versamento. Si evita valorizzando l'exit come
+  // valutazione finché è ancora attiva e incassandola il mese dopo; la
+  // soluzione generale è un movimento vero per il book startup, come già
+  // esiste per le quotate in transactions.js.
+  const suTotal    = startupStats.activeValue;
   const suFees     = startupStats.feesTot;
   const suAbbonamenti = startupStats.subscription;
 
@@ -1564,7 +1598,7 @@ const refreshGoldPrices = useCallback(async () => {
       ...etfPortfolioAssets.map((a) => ({
         name: a.name,
         actualPct: pct((a.lastPrice || 0) * (a.quantity || 0), etfSubTotal),
-        targetPct: a.targetWeight || 0,
+        targetPct: etfTargetOf(a),
       })),
       // Target sul patrimonio totale (Bitcoin, …).
       ...totalTargetAssets.map((a) => ({
@@ -1582,7 +1616,8 @@ const refreshGoldPrices = useCallback(async () => {
       });
     }
     return calcDrift(positions);
-  }, [etfPortfolioAssets, totalTargetAssets, etfSubTotal, goldEtfValue, physGoldValue, grandTotal, goldEtf, goldOnTotal]);
+  }, [etfPortfolioAssets, totalTargetAssets, etfSubTotal, goldEtfValue, physGoldValue,
+      grandTotal, goldEtf, goldOnTotal, etfTargetOf]);
 
   const driftMax = drift.max;
   const driftOver = driftMax > driftThreshold(settings.rebalanceBand ?? 0);
@@ -1627,10 +1662,23 @@ const refreshGoldPrices = useCallback(async () => {
 
   const projDepletion = useMemo(
     () => (projWithdraw ? depletionYear(projData) : null), [projWithdraw, projData]);
-  const finalVal     = projData.at(-1)?.base ?? 0;
-  const totalContrib = grandTotal + projMonthly * 12 * projYears;
-  const projGain     = finalVal - totalContrib;
-  const projROI      = totalContrib > 0 ? (projGain / totalContrib) * 100 : 0;
+  const finalVal = projData.at(-1)?.base ?? 0;
+  // Capitale netto effettivamente immesso: i versamenti si fermano quando parte
+  // la fase di prelievo, e i prelievi escono. Contarli per tutti gli anni dava
+  // un guadagno col segno sbagliato appena si attivava il prelievo — su una
+  // proiezione a 10 anni con prelievo dal quinto, −15.677 € al posto di
+  // +104.323 €.
+  const projCapital  = useMemo(() => projectionCapital({
+    start: grandTotal, monthly: projMonthly, years: projYears,
+    withdrawAfter: projWithdraw ? projWithdrawAfter : null,
+    withdrawMonthly: projWithdrawMonthly,
+  }), [grandTotal, projMonthly, projYears, projWithdraw, projWithdrawAfter, projWithdrawMonthly]);
+  const totalContrib = projCapital.netInvested;
+  const projGain     = r2(finalVal - totalContrib);
+  // Il ROI si misura su quanto è uscito di tasca, non sul netto: con prelievi
+  // ampi il netto può andare a zero o sotto e la percentuale esploderebbe.
+  const projROI      = projCapital.contributed > 0
+    ? (projGain / projCapital.contributed) * 100 : 0;
 
   // ---- Finestra temporale delle analisi ----
   // Le funzioni di metrics.js sono pure e prendono un array: basta tagliarlo
@@ -2170,7 +2218,11 @@ const refreshGoldPrices = useCallback(async () => {
     setTx((prev) => [...prev, ...seedRows(new Set(rows.map((x) => txKey({ name: x.name })))),
       ...rows.map((x) => ({
         id: newId(), date, assetKey: txKey({ name: x.name }), type: "buy",
-        quantity: r2(x.amount / x.price), price: x.price, fee: 0,
+        // Niente r2 sulla quantità: il registro ricostruisce il costo come
+        // quantità × prezzo, e due decimali su uno strumento a tre cifre
+        // spostano l'importo speso (500 € a 237,41 € diventano 500,93 €).
+        // Vedi deriveHolding in transactions.js.
+        quantity: x.amount / x.price, price: x.price, fee: 0,
         notes: "Ribilanciamento",
       }))]);
     goTab("transactions");
@@ -2592,7 +2644,10 @@ const refreshGoldPrices = useCallback(async () => {
                     // Peso sul solo sotto-portafoglio ETF (gli asset a target
                     // sul patrimonio stanno nella sezione Oro & Bitcoin).
                     const weight = etfSubTotal > 0 ? (value / etfSubTotal) * 100 : 0;
-                    const diff   = weight - (a.targetWeight || 0);
+                    // Confronto col target normalizzato, lo stesso che usa il
+                    // ribilanciamento; nel badge resta il valore inserito.
+                    const tgtNorm = etfTargetOf(a);
+                    const diff    = weight - tgtNorm;
                     return (
                       <tr key={a.id}>
                         <td className="asset-name">
@@ -2626,8 +2681,13 @@ const refreshGoldPrices = useCallback(async () => {
                         </td>
                         <td className="num">
                           <span className={`target-badge ${Math.abs(diff) > 3 ? (diff > 0 ? "over" : "under") : "ok"}`}
-                            title="Target % sul sotto-portafoglio ETF">
+                            title={etfTargetSum === 100
+                              ? "Target % sul sotto-portafoglio ETF"
+                              : `I target inseriti sommano a ${etfTargetSum}%: il confronto e il ribilanciamento usano il valore normalizzato a 100, cioè ${etfTargetOf(a)}%.`}>
                             {a.targetWeight || 0}%
+                            {etfTargetSum !== 100 && (
+                              <span className="muted" style={{ fontSize: 10 }}> → {etfTargetOf(a)}%</span>
+                            )}
                           </span>
                         </td>
                         <td><span className="class-tag">{a.assetClass}</span></td>
@@ -3102,7 +3162,7 @@ const refreshGoldPrices = useCallback(async () => {
                         : `⚠ Sulle ${startupStats.closed.length} startup concluse hai recuperato ${fmt(startupStats.recoveredTot)} a fronte di ${fmt(startupStats.closedCost)} di costo totale (commissioni incluse): il capitale non è ancora rientrato.`}
                     {" "}Il ROI complessivo include l'abbonamento ({fmt(startupStats.subscription)}) e valorizza le {startupStats.active.length} attive a {fmt(startupStats.activeValue)}: diventerà il risultato definitivo quando tutte saranno chiuse.
                   </>}
-              {" "}Le startup attive ({fmt(startupStats.activeVal)}) sono valorizzate al costo nel patrimonio; le concluse ne escono — l'incasso di un'exit va inserito a mano in liquidità.
+              {" "}Le startup attive ({fmt(startupStats.activeValue)}) entrano nel patrimonio alla valutazione dichiarata, al costo dove non c'è; le concluse ne escono — l'incasso di un'exit va inserito a mano in liquidità. Per non far leggere il guadagno come un versamento, aggiorna prima la valutazione della posizione e incassa il mese successivo.
             </p>
           </>
         )}
@@ -3578,6 +3638,10 @@ const refreshGoldPrices = useCallback(async () => {
                       const vals = Object.values(row.months);
                       const yearRet = vals.length
                         ? r2((vals.reduce((acc, v) => acc * (1 + v / 100), 1) - 1) * 100) : null;
+                      // Un anno con meno di 12 mesi non è un rendimento annuo: è
+                      // il composto dei mesi che ci sono. Senza dirlo, l'anno in
+                      // corso e quello d'esordio si leggono come gli altri.
+                      const parziale = vals.length > 0 && vals.length < 12;
                       return (
                         <tr key={row.year}>
                           <td className="mono"><strong>{row.year}</strong></td>
@@ -3589,8 +3653,12 @@ const refreshGoldPrices = useCallback(async () => {
                               </td>
                             );
                           })}
-                          <td className={`num mono ${(yearRet ?? 0) >= 0 ? "pos-text" : "neg-text"}`}>
+                          <td className={`num mono ${(yearRet ?? 0) >= 0 ? "pos-text" : "neg-text"}`}
+                            title={parziale
+                              ? `Composto di ${vals.length} mesi su 12: non è un rendimento annuo.`
+                              : undefined}>
                             <strong>{yearRet == null ? "—" : `${yearRet > 0 ? "+" : ""}${yearRet.toFixed(1)}%`}</strong>
+                            {parziale && <span className="muted" style={{ fontSize: 10 }}> ({vals.length}m)</span>}
                           </td>
                         </tr>
                       );
@@ -3716,9 +3784,15 @@ const refreshGoldPrices = useCallback(async () => {
                   </div>
                   {fiscal.expiring > 0 && (
                     <div className="alert alert-amber" style={{ marginTop: 8 }}>
-                      <AlertTriangle size={14}/> {fmt(fiscal.expiring)} di minusvalenze scadono senza
-                      essere state usate: si recuperano solo realizzando una plusvalenza compensabile
-                      (azioni, ETC, crypto — non ETF) entro il termine.
+                      <AlertTriangle size={14}/> {fmt(fiscal.expiring)} di minusvalenze scadono a fine
+                      anno senza essere state usate: si recuperano solo realizzando una plusvalenza
+                      compensabile (azioni, ETC, crypto — non ETF) entro il termine.
+                    </div>
+                  )}
+                  {fiscal.expired > 0 && (
+                    <div className="alert alert-amber" style={{ marginTop: 8 }}>
+                      <AlertTriangle size={14}/> {fmt(fiscal.expired)} di minusvalenze sono già scadute
+                      e non sono più compensabili.
                     </div>
                   )}
                 </div>
